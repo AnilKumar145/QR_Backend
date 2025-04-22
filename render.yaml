@@ -10,4 +10,8 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        sync: false
+        value: https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30

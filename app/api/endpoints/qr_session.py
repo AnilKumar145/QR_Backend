@@ -23,28 +23,21 @@ router = APIRouter()
 @router.post("/generate", response_model=QRSessionResponse)
 def generate_qr_code(duration_minutes: int = 2, db: Session = Depends(get_db)):
     session_id = str(uuid.uuid4())
-    # Use UTC for consistency
     expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
     
-    # Create QR data with absolute URL
-    qr_data = {
-        "session_id": session_id,
-        "attendance_url": f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
-    }
+    # Generate direct URL QR code with HTTPS Vercel URL
+    attendance_url = f"https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app/mark-attendance/{session_id}"
     
-    print("Debug - QR Data:", qr_data)  # Add this debug line
+    print("Debug - Attendance URL:", attendance_url)  # Debug line
     
-    # Convert to JSON string
-    qr_json = json.dumps(qr_data)
-    
-    # Generate QR code
+    # Generate QR code with direct URL
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
         box_size=10,
         border=4,
     )
-    qr.add_data(qr_json)
+    qr.add_data(attendance_url)
     qr.make(fit=True)
 
     # Create QR image
@@ -126,6 +119,10 @@ def test_validate_session_invalid_data(client: TestClient):
     )
     assert response.status_code == 404  # Session not found
     assert "not found" in response.json()["detail"].lower()
+
+
+
+
 
 
 

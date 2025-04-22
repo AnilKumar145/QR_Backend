@@ -40,7 +40,12 @@ app.add_middleware(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=[
+        "https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app",  # New URL
+        "https://qr-frontend-2rd8-anilkumar145s-projects.vercel.app",  # Keep old URL for reference
+        "http://localhost:5173",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

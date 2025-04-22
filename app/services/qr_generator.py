@@ -13,24 +13,20 @@ class QRGenerator:
         return str(uuid.uuid4())
 
     @staticmethod
-    def create_qr_data(session_id: str, expires_at: datetime) -> dict:
-        qr_data = {
-            "session_id": session_id,
-            "expires_at": expires_at.isoformat(),
-            "attendance_url": f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
-        }
-        print("Generated QR Data:", qr_data)  # Add this debug line
-        return qr_data
+    def create_qr_data(session_id: str, expires_at: datetime) -> str:
+        # Create a direct URL using HTTPS
+        return f"https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app/mark-attendance/{session_id}"
 
     @staticmethod
-    def generate_qr_code(data: dict) -> str:
+    def generate_qr_code(data: str) -> str:
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
             box_size=10,
             border=4,
         )
-        qr.add_data(json.dumps(data))
+        # Add the URL directly, no JSON encoding needed
+        qr.add_data(data)
         qr.make(fit=True)
         
         img = qr.make_image(fill_color="black", back_color="white")
@@ -49,5 +45,11 @@ class QRGenerator:
         qr_image = cls.generate_qr_code(qr_data)
         
         return session_id, expires_at, qr_image
+
+
+
+
+
+
 
 

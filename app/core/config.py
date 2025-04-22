@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     MAX_SELFIE_SIZE: int = 5_242_880  # 5MB in bytes
     
     # Frontend URL configuration
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str = "https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app"  # Updated Vercel URL
 
     class Config:
         case_sensitive = True
@@ -34,4 +34,9 @@ class Settings(BaseSettings):
         extra = "ignore"  # This will ignore any extra fields in the .env file
 
 settings = Settings()
+
+
+
+
+
 
