@@ -38,11 +38,14 @@ app.add_middleware(
     allow_origins=[
         "https://qr-frontend-attendance-system.vercel.app",
         "http://localhost:5173",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "*"  # Temporarily add this for testing
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Mount static files directory
