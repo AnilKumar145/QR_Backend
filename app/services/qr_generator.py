@@ -15,7 +15,7 @@ class QRGenerator:
     @staticmethod
     def create_qr_data(session_id: str, expires_at: datetime) -> str:
         # Create a direct URL using HTTPS
-        return f"https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app/mark-attendance/{session_id}"
+        return f"https://qr-frontend-attendance-system.vercel.app/mark-attendance/{session_id}"
 
     @staticmethod
     def generate_qr_code(data: str) -> str:
@@ -45,6 +45,7 @@ class QRGenerator:
         qr_image = cls.generate_qr_code(qr_data)
         
         return session_id, expires_at, qr_image
+
 
 
 
