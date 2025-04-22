@@ -1,11 +1,16 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 from app.core.config import settings
 from app.api.api import api_router
 from app.core.middleware import RateLimitMiddleware
 from app.db.base import init_db
+
+# Create required directories
+os.makedirs(settings.STATIC_FILES_DIR, exist_ok=True)
+os.makedirs(settings.SELFIE_DIR, exist_ok=True)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
