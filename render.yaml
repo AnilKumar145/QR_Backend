@@ -6,7 +6,9 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: qr-attendance-db
+          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
@@ -15,3 +17,9 @@ services:
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: 30
+
+databases:
+  - name: qr-attendance-db
+    databaseName: qr_attendance
+    user: qr_attendance_user
+

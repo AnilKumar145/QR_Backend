@@ -1,34 +1,24 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from app.core.config import settings
 from app.api.api import api_router
 from app.core.middleware import RateLimitMiddleware
+from app.db.base import init_db
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="""
     QR Attendance System API
-    
-    Features:
-    * QR Code Generation for Attendance Sessions
-    * Location-based Attendance Validation
-    * Selfie Upload with Attendance
-    * Admin Dashboard APIs
-    
-    For authentication, use the /token endpoint to obtain your access token.
     """,
-    contact={
-        "name": "Admin",
-        "email": "admin@example.com",
-    },
-    license_info={
-        "name": "Private",
-    },
 )
+
+# Initialize database tables
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
 # Add Rate Limiting
 app.add_middleware(
@@ -41,8 +31,7 @@ app.add_middleware(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app",  # New URL
-        "https://qr-frontend-2rd8-anilkumar145s-projects.vercel.app",  # Keep old URL for reference
+        "https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app",
         "http://localhost:5173",
         "http://localhost:3000"
     ],
