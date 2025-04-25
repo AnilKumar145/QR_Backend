@@ -16,9 +16,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Institution settings
-    INSTITUTION_LAT: float = 16.466167  # KL University coordinates
-    INSTITUTION_LON: float = 80.674499  # KL University coordinates
-    GEOFENCE_RADIUS_KM: float = 0.05  # 50 meters radius
+    INSTITUTION_LAT: float = 16.4663  # Institution's latitude
+    INSTITUTION_LON: float = 80.6747  # Institution's longitude
+    GEOFENCE_RADIUS_M: float = 500.0  # 500 meters radius for geofencing
     
     # File storage settings
     STATIC_FILES_DIR: str = "static"
@@ -34,10 +34,6 @@ class Settings(BaseSettings):
         extra = "ignore"  # This will ignore any extra fields in the .env file
 
 settings = Settings()
-
-
-
-
 
 
 

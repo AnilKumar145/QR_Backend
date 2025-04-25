@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from fastapi.testclient import TestClient
@@ -15,22 +15,41 @@ import uuid
 import qrcode
 import json
 import base64
+import logging
 from io import BytesIO
 from app.core.config import settings
+from app.services.geo_validation import GeoValidator, InvalidLocationException
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.post("/generate", response_model=QRSessionResponse)
-def generate_qr_code(duration_minutes: int = 2, db: Session = Depends(get_db)):
+def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Session = Depends(get_db)):
+    """
+    Generate QR code for attendance session
+    - duration_minutes must be > 0 and <= 1440 (24 hours)
+    """
+    # Validate duration
+    if duration_minutes <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Duration must be greater than 0 minutes"
+        )
+    if duration_minutes > 1440:  # 24 hours
+        raise HTTPException(
+            status_code=400,
+            detail="Duration cannot exceed 24 hours"
+        )
+
     session_id = str(uuid.uuid4())
     expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
     
-    # Generate direct URL QR code with HTTPS Vercel URL
-    attendance_url = f"https://qr-frontend-gmx7-anilkumar145s-projects.vercel.app/mark-attendance/{session_id}"
+    # Use the FRONTEND_URL from settings
+    attendance_url = f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
     
-    print("Debug - Attendance URL:", attendance_url)  # Debug line
-    
-    # Generate QR code with direct URL
+    # Generate QR code
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -40,15 +59,12 @@ def generate_qr_code(duration_minutes: int = 2, db: Session = Depends(get_db)):
     qr.add_data(attendance_url)
     qr.make(fit=True)
 
-    # Create QR image
+    # Create QR image and session
     qr_image = qr.make_image(fill_color="black", back_color="white")
-    
-    # Convert to base64
     buffered = BytesIO()
     qr_image.save(buffered, format="PNG")
     qr_image_base64 = base64.b64encode(buffered.getvalue()).decode()
     
-    # Create DB session
     db_session = QRSession(
         session_id=session_id,
         expires_at=expires_at,
@@ -63,6 +79,72 @@ def generate_qr_code(duration_minutes: int = 2, db: Session = Depends(get_db)):
 @router.post("/validate", response_model=AttendanceResponse)
 def validate_session(session_data: AttendanceCreate, db: Session = Depends(get_db)):
     """Validate QR session and mark attendance"""
+    try:
+        # First validate coordinate precision
+        lat_str = str(abs(float(session_data.location_lat)))
+        lon_str = str(abs(float(session_data.location_lon)))
+        
+        # Check decimal places
+        lat_decimals = len(lat_str.split('.')[-1]) if '.' in lat_str else 0
+        lon_decimals = len(lon_str.split('.')[-1]) if '.' in lon_str else 0
+        
+        if lat_decimals > 6 or lon_decimals > 6:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Coordinates must not exceed 6 decimal places. Got lat:{lat_decimals}, lon:{lon_decimals} decimals"
+            )
+
+        # Round coordinates to 6 decimal places
+        location_lat = round(float(session_data.location_lat), 6)
+        location_lon = round(float(session_data.location_lon), 6)
+
+        # Validate location using GeoValidator
+        geo_validator = GeoValidator()
+        try:
+            is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
+            
+            # Log the distance for debugging
+            logger.info(f"Distance from institution: {distance:.2f} meters")
+            
+            if not is_valid:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Location out of range",
+                        "message": f"You are {distance:.0f} meters away from campus. Maximum allowed distance is 500 meters.",
+                        "your_location": {
+                            "lat": location_lat,
+                            "lon": location_lon
+                        },
+                        "institution_location": {
+                            "lat": settings.INSTITUTION_LAT,
+                            "lon": settings.INSTITUTION_LON
+                        },
+                        "distance": round(distance),
+                        "max_allowed_distance": settings.GEOFENCE_RADIUS_M
+                    }
+                )
+
+        except InvalidLocationException as e:
+            raise HTTPException(
+                status_code=400,
+                detail=str(e)
+            )
+
+        # Continue with session validation and attendance marking...
+        # Basic coordinate validation
+        if not (-90 <= location_lat <= 90) or not (-180 <= location_lon <= 180):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid coordinate values"
+            )
+            
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid coordinate format"
+        )
+
     # Get the session
     session = db.query(QRSession).filter_by(session_id=session_data.session_id).first()
     if not session:
@@ -71,7 +153,7 @@ def validate_session(session_data: AttendanceCreate, db: Session = Depends(get_d
             detail="Session not found"
         )
     
-    # Check if session is expired
+    # Check session expiration
     if session.is_expired():
         raise HTTPException(
             status_code=400,
@@ -89,14 +171,34 @@ def validate_session(session_data: AttendanceCreate, db: Session = Depends(get_d
             status_code=400,
             detail="Attendance already marked for this session"
         )
-    
-    # Create new attendance record
-    attendance = Attendance(**session_data.model_dump())
-    db.add(attendance)
-    db.commit()
-    db.refresh(attendance)
-    
-    return attendance
+
+    # Validate location using GeoValidator
+    geo_validator = GeoValidator()
+    try:
+        is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
+        
+        # We'll never reach here if location is invalid because is_location_valid will raise an exception
+        attendance_dict = session_data.model_dump()
+        attendance_dict.update({
+            'location_lat': location_lat,
+            'location_lon': location_lon,
+            'is_valid_location': True,
+            'timestamp': datetime.now(UTC)
+        })
+        
+        attendance = Attendance(**attendance_dict)
+        
+        db.add(attendance)
+        db.commit()
+        db.refresh(attendance)
+        
+        return attendance
+
+    except InvalidLocationException as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
 
 @pytest.mark.qr_session
 def test_validate_session_invalid_data(client: TestClient):
@@ -119,6 +221,18 @@ def test_validate_session_invalid_data(client: TestClient):
     )
     assert response.status_code == 404  # Session not found
     assert "not found" in response.json()["detail"].lower()
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
