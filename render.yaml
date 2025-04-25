@@ -14,16 +14,15 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        value: https://qr-frontend-attendance-system.vercel.app
-      - key: ALGORITHM
-        value: HS256
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: 30
+        value: https://qr-frontend-attendancesystem.vercel.app
 
 databases:
   - name: qr-attendance-db
     databaseName: qr_attendance
     user: qr_attendance_user
+
+
+
 
 
 

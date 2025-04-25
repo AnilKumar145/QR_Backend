@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     MAX_SELFIE_SIZE: int = 5_242_880  # 5MB in bytes
     
     # Frontend URL configuration
-    FRONTEND_URL: str = "https://qr-frontend-attendance-system.vercel.app"
+    FRONTEND_URL: str = "https://qr-frontend-attendancesystem.vercel.app"
 
     class Config:
         case_sensitive = True
@@ -34,6 +34,7 @@ class Settings(BaseSettings):
         extra = "ignore"  # This will ignore any extra fields in the .env file
 
 settings = Settings()
+
 
 
 
