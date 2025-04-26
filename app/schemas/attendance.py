@@ -1,16 +1,18 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, validator
+from pydantic import BaseModel, Field, EmailStr
+from typing import Annotated
+from pydantic.functional_validators import StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
 from datetime import datetime
 from typing import Optional, Annotated
 from uuid import UUID
 import re
-
 class AttendanceBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100, description="Full name of the student")
     email: EmailStr = Field(..., description="Valid email address")
     roll_no: str = Field(..., min_length=5, max_length=20, description="Student roll number")
-    phone: Annotated[str, StringConstraints(pattern=r"^\d{10}$")] = Field(
+    phone: Annotated[str, StringConstraints(pattern=r'^\d{10,12}$')] = Field(
         ..., 
-        description="10-digit phone number"
+        description="Phone number (10-12 digits)"
     )
     branch: str = Field(
         ..., 
@@ -87,6 +89,9 @@ class AttendanceList(BaseModel):
     size: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+
 
 
 
