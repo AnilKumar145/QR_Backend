@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, EmailStr
 from typing import Annotated
-from pydantic.functional_validators import StringConstraints
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, validator
 from datetime import datetime
 from typing import Optional, Annotated
 from uuid import UUID
@@ -89,6 +88,7 @@ class AttendanceList(BaseModel):
     size: int
 
     model_config = ConfigDict(from_attributes=True)
+
 
 
 
