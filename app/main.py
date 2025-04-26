@@ -36,7 +36,7 @@ app.add_middleware(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://qr-frontend-attendancesystem.vercel.app",
+        "https://qr-frontend-w1va.vercel.app",  # New frontend URL
         "http://localhost:5173",
         "http://localhost:3000"
     ],
