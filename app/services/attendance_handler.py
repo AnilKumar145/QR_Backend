@@ -90,6 +90,7 @@ class AttendanceHandler:
                 logger.warning(f"Invalid location flagged for roll_no: {attendance_data.roll_no}")
 
             try:
+                logger.info(f"Attempting to commit attendance record for roll_no: {attendance_data.roll_no}")
                 self.db.commit()
                 self.db.refresh(attendance)
                 logger.info(f"Successfully saved attendance for roll_no: {attendance_data.roll_no}")
@@ -102,6 +103,7 @@ class AttendanceHandler:
         except Exception as e:
             logger.error(f"Error in process_attendance: {str(e)}")
             return False, str(e)
+
 
 
 
