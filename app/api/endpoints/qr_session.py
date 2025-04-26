@@ -31,50 +31,58 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
     Generate QR code for attendance session
     - duration_minutes must be > 0 and <= 1440 (24 hours)
     """
-    # Validate duration
-    if duration_minutes <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Duration must be greater than 0 minutes"
-        )
-    if duration_minutes > 1440:  # 24 hours
-        raise HTTPException(
-            status_code=400,
-            detail="Duration cannot exceed 24 hours"
-        )
+    try:
+        # Validate duration
+        if duration_minutes <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Duration must be greater than 0 minutes"
+            )
+        if duration_minutes > 1440:  # 24 hours
+            raise HTTPException(
+                status_code=400,
+                detail="Duration cannot exceed 24 hours"
+            )
 
-    session_id = str(uuid.uuid4())
-    expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
-    
-    # Use the FRONTEND_URL from settings
-    attendance_url = f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
-    
-    # Generate QR code
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(attendance_url)
-    qr.make(fit=True)
+        session_id = str(uuid.uuid4())
+        expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
+        
+        # Use the FRONTEND_URL from settings
+        attendance_url = f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
+        
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(attendance_url)
+        qr.make(fit=True)
 
-    # Create QR image and session
-    qr_image = qr.make_image(fill_color="black", back_color="white")
-    buffered = BytesIO()
-    qr_image.save(buffered, format="PNG")
-    qr_image_base64 = base64.b64encode(buffered.getvalue()).decode()
-    
-    db_session = QRSession(
-        session_id=session_id,
-        expires_at=expires_at,
-        qr_image=f"data:image/png;base64,{qr_image_base64}"
-    )
-    db.add(db_session)
-    db.commit()
-    db.refresh(db_session)
-    
-    return db_session
+        # Create QR image
+        qr_image = qr.make_image(fill_color="black", back_color="white")
+        buffered = BytesIO()
+        qr_image.save(buffered, format="PNG")
+        qr_image_base64 = base64.b64encode(buffered.getvalue()).decode()
+        
+        db_session = QRSession(
+            session_id=session_id,
+            expires_at=expires_at,
+            qr_image=f"data:image/png;base64,{qr_image_base64}"
+        )
+        
+        db.add(db_session)
+        db.commit()
+        db.refresh(db_session)
+        
+        return db_session
+    except Exception as e:
+        logger.error(f"Error generating QR code: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate QR code: {str(e)}"
+        )
 
 @router.post("/validate", response_model=AttendanceResponse)
 def validate_session(session_data: AttendanceCreate, db: Session = Depends(get_db)):
@@ -221,6 +229,8 @@ def test_validate_session_invalid_data(client: TestClient):
     )
     assert response.status_code == 404  # Session not found
     assert "not found" in response.json()["detail"].lower()
+
+
 
 
 
