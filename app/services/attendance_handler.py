@@ -93,8 +93,20 @@ class AttendanceHandler:
                 logger.info(f"Attempting to commit attendance record for roll_no: {attendance_data.roll_no}")
                 self.db.commit()
                 self.db.refresh(attendance)
-                logger.info(f"Successfully saved attendance for roll_no: {attendance_data.roll_no}")
-                return True, "Attendance recorded successfully"
+                
+                # Verify the record was actually saved
+                verification = self.db.query(Attendance).filter(
+                    Attendance.session_id == attendance_data.session_id,
+                    Attendance.roll_no == attendance_data.roll_no
+                ).first()
+                
+                if verification:
+                    logger.info(f"Successfully verified attendance for roll_no: {attendance_data.roll_no}")
+                    return True, "Attendance recorded successfully"
+                else:
+                    logger.error(f"Attendance record not found after commit for roll_no: {attendance_data.roll_no}")
+                    return False, "Failed to record attendance: Database verification failed"
+                
             except Exception as e:
                 self.db.rollback()
                 logger.error(f"Database error while saving attendance: {str(e)}")
@@ -103,6 +115,7 @@ class AttendanceHandler:
         except Exception as e:
             logger.error(f"Error in process_attendance: {str(e)}")
             return False, str(e)
+
 
 
 
