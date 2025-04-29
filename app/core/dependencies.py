@@ -7,7 +7,7 @@ from app.db.base import get_db
 from .security import verify_token
 from .config import settings
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/admin/login")
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),

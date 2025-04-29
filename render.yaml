@@ -11,6 +11,8 @@ services:
         fromDatabase:
           name: qr-attendance-db
           property: connectionString
+      - key: RENDER
+        value: "true"
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
@@ -18,8 +20,9 @@ services:
 
 databases:
   - name: qr-attendance-db
-    databaseName: qr_attendance
-    user: qr_attendance_user
+    databaseName: qr_attendance_tnze
+    user: qr_attendance_tnze_user
+
 
 
 

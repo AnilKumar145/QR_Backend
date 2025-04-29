@@ -44,8 +44,8 @@ class AttendanceBase(BaseModel):
         str_val = str(abs(float(v)))
         if '.' in str_val:
             decimals = len(str_val.split('.')[-1])
-            if decimals > 6:
-                raise ValueError("Coordinates must not exceed 6 decimal places")
+            if decimals > 7:
+                raise ValueError("Coordinates must not exceed 7 decimal places")
         return v
 
     session_id: str = Field(
@@ -62,8 +62,8 @@ class AttendanceBase(BaseModel):
                 "phone": "1234567890",
                 "branch": "Computer Science",
                 "section": "A1",
-                "location_lat": 16.4663003,  # Updated example coordinate
-                "location_lon": 80.6747153,  # Updated example coordinate
+                "location_lat": 16.4663003,
+                "location_lon": 80.6747153,
                 "session_id": "550e8400-e29b-41d4-a716-446655440000"
             }
         }
