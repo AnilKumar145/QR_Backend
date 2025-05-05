@@ -10,6 +10,7 @@ from app.models.flagged_log import FlaggedLog
 from app.schemas.attendance import AttendanceCreate
 from app.services.geo_validation import GeoValidator
 from app.utils.image_saver import ImageSaver
+from app.utils.cloud_storage import CloudStorage
 from app.core.exceptions import InvalidLocationException
 
 # Initialize logger
@@ -59,12 +60,13 @@ class AttendanceHandler:
 
             logger.info(f"Location validation result: valid={is_valid_location}, distance={distance:.2f}km")
 
-            # Save selfie
-            selfie_path = await self.image_saver.save_selfie(
-                selfie, 
+            # Save selfie - use CloudStorage instead of ImageSaver
+            selfie_path = await CloudStorage.upload_selfie(
+                selfie,
                 attendance_data.roll_no,
                 attendance_data.session_id
             )
+            
             logger.info(f"Selfie saved at: {selfie_path}")
 
             # Create attendance record
@@ -115,6 +117,7 @@ class AttendanceHandler:
         except Exception as e:
             logger.error(f"Error in process_attendance: {str(e)}")
             return False, str(e)
+
 
 
 

@@ -40,3 +40,9 @@ cors>=1.0.1
 typing-extensions>=4.8.0
 annotated-types>=0.6.0
 anyio>=3.6.2
+
+# File Operations
+aiofiles>=0.8.0
+
+# File Storage
+cloudinary>=1.36.0
