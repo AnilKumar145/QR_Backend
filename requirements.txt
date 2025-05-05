@@ -46,3 +46,15 @@ aiofiles>=0.8.0
 
 # File Storage
 cloudinary>=1.36.0
+
+# Timezone handling
+pytz>=2023.3
+
+# Date/Time utilities
+python-dateutil>=2.8.2
+
+# Logging enhancements
+loguru>=0.7.0
+
+# Debugging tools
+rich>=13.5.0

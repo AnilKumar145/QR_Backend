@@ -6,37 +6,15 @@ from typing import Optional, Annotated
 from uuid import UUID
 import re
 class AttendanceBase(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100, description="Full name of the student")
-    email: EmailStr = Field(..., description="Valid email address")
-    roll_no: str = Field(..., min_length=5, max_length=20, description="Student roll number")
-    phone: Annotated[str, StringConstraints(pattern=r'^\d{10,12}$')] = Field(
-        ..., 
-        description="Phone number (10-12 digits)"
-    )
-    branch: str = Field(
-        ..., 
-        min_length=2, 
-        max_length=50,
-        description="Academic branch/department"
-    )
-    section: str = Field(
-        ..., 
-        min_length=1, 
-        max_length=10,
-        description="Class section"
-    )
-    location_lat: float = Field(
-        ..., 
-        ge=-90, 
-        le=90,
-        description="Latitude coordinate"
-    )
-    location_lon: float = Field(
-        ..., 
-        ge=-180, 
-        le=180,
-        description="Longitude coordinate"
-    )
+    name: str = Field(..., min_length=2, max_length=100)
+    email: EmailStr = Field(...)
+    roll_no: str = Field(..., min_length=5, max_length=20)
+    phone: Annotated[str, StringConstraints(pattern=r'^\d{10,12}$')] = Field(...)
+    branch: str = Field(..., min_length=2, max_length=50)
+    section: str = Field(..., min_length=1, max_length=10)
+    location_lat: float = Field(..., ge=-90, le=90)
+    location_lon: float = Field(..., ge=-180, le=180)
+    session_id: str = Field(...)
 
     @validator('location_lat', 'location_lon')
     def validate_coordinate_precision(cls, v):
@@ -47,11 +25,6 @@ class AttendanceBase(BaseModel):
             if decimals > 7:
                 raise ValueError("Coordinates must not exceed 7 decimal places")
         return v
-
-    session_id: str = Field(
-        ...,
-        description="QR session identifier"
-    )
 
     class Config:
         json_schema_extra = {
@@ -73,12 +46,12 @@ class AttendanceCreate(AttendanceBase):
 
 class AttendanceResponse(AttendanceBase):
     id: int
-    created_at: datetime
     is_valid_location: bool
-    selfie_path: Optional[str] = None
     timestamp: datetime
+    created_at: datetime  # This field is required in the response
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 class AttendanceList(BaseModel):
     """Schema for listing multiple attendance records"""
@@ -88,6 +61,8 @@ class AttendanceList(BaseModel):
     size: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
 
 
 

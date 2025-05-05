@@ -19,6 +19,7 @@ class Attendance(Base):
     location_lon = Column(Float, nullable=False)
     is_valid_location = Column(Boolean, default=False)
     session_id = Column(String, ForeignKey("qr_sessions.session_id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC))
     timestamp = Column(DateTime(timezone=True), default=datetime.now(UTC))
     selfie_path = Column(String, nullable=True)
     selfie_data = Column(LargeBinary)
@@ -29,6 +30,9 @@ class Attendance(Base):
     
     def __repr__(self):
         return f"<Attendance(roll_no={self.roll_no}, session_id={self.session_id})>"
+
+
+
 
 
 

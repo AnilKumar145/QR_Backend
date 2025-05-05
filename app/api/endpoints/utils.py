@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, RedirectResponse
 import os
 from app.services.geo_validation import GeoValidator, InvalidLocationException
 from app.core.config import settings
@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
 from app.db.base import get_db
+from app.models.attendance import Attendance
 
 # Create a database engine
 DATABASE_URL = "postgresql://postgres:Anil@localhost:5432/qr_attendance"
@@ -40,13 +41,36 @@ def validate_location(lat: float, lon: float):
             detail=str(e)
         )
 
-@router.get("/selfie/{filename}")
-async def get_selfie(filename: str):
-    """Serve selfie image"""
-    file_path = os.path.join(settings.SELFIE_DIR, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(file_path)
+@router.get("/selfie/{roll_no}")
+async def get_selfie_by_roll_no(roll_no: str, db: Session = Depends(get_db)):
+    """Serve the most recent selfie for a specific roll number"""
+    # Find the most recent attendance record for this roll number
+    attendance = db.query(Attendance).filter(
+        Attendance.roll_no == roll_no
+    ).order_by(Attendance.timestamp.desc()).first()
+    
+    if not attendance:
+        raise HTTPException(status_code=404, detail=f"No attendance record found for roll number: {roll_no}")
+    
+    # If we have binary data in the database, return it directly
+    if attendance.selfie_data:
+        return Response(
+            content=attendance.selfie_data,
+            media_type=attendance.selfie_content_type or "image/jpeg"
+        )
+    
+    # If we have a Cloudinary URL, redirect to it
+    if attendance.selfie_path and attendance.selfie_path.startswith('http'):
+        return RedirectResponse(url=attendance.selfie_path)
+    
+    # Try to find the file locally
+    if attendance.selfie_path:
+        local_path = os.path.join(settings.STATIC_FILES_DIR, attendance.selfie_path.lstrip('/static/'))
+        if os.path.exists(local_path):
+            return FileResponse(local_path)
+    
+    # If we get here, we couldn't find the selfie
+    raise HTTPException(status_code=404, detail=f"Selfie not found for roll number: {roll_no}")
 
 @router.get("/db-test", response_model=dict)
 async def test_database_connection(db: Session = Depends(get_db)):
@@ -95,4 +119,10 @@ async def test_database_connection(db: Session = Depends(get_db)):
             "error_type": type(e).__name__,
             "timestamp": datetime.now().isoformat()
         }
+
+
+
+
+
+
 

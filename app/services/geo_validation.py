@@ -91,14 +91,9 @@ class GeoValidator:
                 lon
             )
             
-            # Additional validation for suspiciously small distances
-            if distance_meters < 1:  # Less than 1 meter is suspicious
-                raise InvalidLocationException(
-                    distance_meters,
-                    lat, lon,
-                    "Location appears to be exactly at institution coordinates. Please ensure GPS is working correctly."
-                )
-
+            # Remove the suspicious distance check - allow very close locations
+            # This was causing legitimate attendance to be rejected
+            
             if distance_meters > self.MAX_DISTANCE_M:
                 raise InvalidLocationException(
                     distance_meters, 
@@ -116,6 +111,8 @@ class GeoValidator:
                 logger.error(f"Location validation error: {str(e)}")
                 raise InvalidLocationException(0, lat, lon, str(e))
             raise
+
+
 
 
 

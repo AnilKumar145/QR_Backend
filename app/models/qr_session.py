@@ -10,9 +10,9 @@ class QRSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String, unique=True, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     expires_at = Column(DateTime(timezone=True))
-    qr_image = Column(String)
+    qr_image = Column(String, nullable=False)
     
     # Add relationship to Attendance
     attendances = relationship("Attendance", back_populates="session")
@@ -23,6 +23,9 @@ class QRSession(Base):
 
     def __repr__(self):
         return f"<QRSession(session_id={self.session_id}, expires_at={self.expires_at})>"
+
+
+
 
 
 

@@ -16,6 +16,7 @@ def create_admin_user(username: str, password: str):
             print(f"User '{username}' already exists.")
             return
         hashed_password = pwd_context.hash(password)
+        # Create admin user without email
         admin_user = AdminUser(
             username=username,
             hashed_password=hashed_password,

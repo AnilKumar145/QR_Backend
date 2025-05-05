@@ -12,3 +12,4 @@ class AdminCreateRequest(BaseModel):
     username: str
     password: str
     confirm_password: str
+    # email field removed

@@ -1,18 +1,20 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 class QRSessionBase(BaseModel):
     session_id: str
+    qr_image: str
+    expires_at: datetime
 
 class QRSessionCreate(QRSessionBase):
-    expires_at: datetime
+    pass
 
 class QRSessionResponse(QRSessionBase):
     id: int
-    created_at: datetime
-    expires_at: datetime
-    qr_image: str  # base64 encoded image
+    created_at: datetime  # Make sure this is required and not Optional
 
     class Config:
         from_attributes = True  # new pydantic v2 syntax (previously orm_mode)
+
+

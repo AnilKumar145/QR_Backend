@@ -52,8 +52,6 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
     - duration_minutes must be > 0 and <= 1440 (24 hours)
     """
     try:
-        logger.info(f"Generating QR code with duration: {duration_minutes} minutes")
-        
         # Validate duration
         if duration_minutes <= 0:
             raise HTTPException(
@@ -69,11 +67,8 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
         session_id = str(uuid.uuid4())
         expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
         
-        # Use the FRONTEND_URL from settings
+        # Generate attendance URL
         attendance_url = f"{settings.FRONTEND_URL}/attendance/{session_id}"
-        
-        # Log the URL for debugging
-        logger.info(f"Generated attendance URL: {attendance_url}")
         
         # Generate QR code
         qr = qrcode.QRCode(
@@ -91,22 +86,20 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
         qr_image.save(buffered, format="PNG")
         qr_image_base64 = base64.b64encode(buffered.getvalue()).decode()
         
-        logger.info(f"Creating QR session in database with ID: {session_id}")
+        # Create QR session with explicit created_at
         db_session = QRSession(
             session_id=session_id,
             expires_at=expires_at,
-            qr_image=f"data:image/png;base64,{qr_image_base64}"
+            qr_image=f"data:image/png;base64,{qr_image_base64}",
+            created_at=datetime.now(UTC)  # Explicitly set created_at
         )
         
         db.add(db_session)
         db.commit()
         db.refresh(db_session)
         
-        logger.info(f"QR session created successfully: {session_id}")
         return db_session
     except Exception as e:
-        logger.error(f"Error generating QR code: {str(e)}")
-        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate QR code: {str(e)}"
@@ -168,58 +161,42 @@ def validate_session(session_data: AttendanceCreate, db: Session = Depends(get_d
             )
 
         # Continue with session validation and attendance marking...
-        # Basic coordinate validation
-        if not (-90 <= location_lat <= 90) or not (-180 <= location_lon <= 180):
+        # Get the session
+        session = db.query(QRSession).filter_by(session_id=session_data.session_id).first()
+        if not session:
+            raise HTTPException(
+                status_code=404,
+                detail="Session not found"
+            )
+        
+        # Check session expiration
+        if session.is_expired():
             raise HTTPException(
                 status_code=400,
-                detail="Invalid coordinate values"
+                detail="Session has expired"
             )
-            
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid coordinate format"
-        )
 
-    # Get the session
-    session = db.query(QRSession).filter_by(session_id=session_data.session_id).first()
-    if not session:
-        raise HTTPException(
-            status_code=404,
-            detail="Session not found"
-        )
-    
-    # Check session expiration
-    if session.is_expired():
-        raise HTTPException(
-            status_code=400,
-            detail="Session has expired"
-        )
-
-    # Check for duplicate attendance
-    existing_attendance = db.query(Attendance).filter_by(
-        session_id=session_data.session_id,
-        roll_no=session_data.roll_no
-    ).first()
-    
-    if existing_attendance:
-        raise HTTPException(
-            status_code=400,
-            detail="Attendance already marked for this session"
-        )
-
-    # Validate location using GeoValidator
-    geo_validator = GeoValidator()
-    try:
-        is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
+        # Check for duplicate attendance
+        existing_attendance = db.query(Attendance).filter_by(
+            session_id=session_data.session_id,
+            roll_no=session_data.roll_no
+        ).first()
         
-        # We'll never reach here if location is invalid because is_location_valid will raise an exception
+        if existing_attendance:
+            raise HTTPException(
+                status_code=400,
+                detail="Attendance already marked for this session"
+            )
+
+        # Create attendance record with created_at field
+        current_time = datetime.now(UTC)
         attendance_dict = session_data.model_dump()
         attendance_dict.update({
             'location_lat': location_lat,
             'location_lon': location_lon,
             'is_valid_location': True,
-            'timestamp': datetime.now(UTC)
+            'timestamp': current_time,
+            'created_at': current_time  # Add this line to set created_at
         })
         
         attendance = Attendance(**attendance_dict)
@@ -230,10 +207,14 @@ def validate_session(session_data: AttendanceCreate, db: Session = Depends(get_d
         
         return attendance
 
-    except InvalidLocationException as e:
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating session: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(
-            status_code=400,
-            detail=str(e)
+            status_code=500,
+            detail=f"Failed to validate session: {str(e)}"
         )
 
 @pytest.mark.qr_session
@@ -257,6 +238,10 @@ def test_validate_session_invalid_data(client: TestClient):
     )
     assert response.status_code == 404  # Session not found
     assert "not found" in response.json()["detail"].lower()
+
+
+
+
 
 
 
