@@ -48,7 +48,11 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
         expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
         
         # Use the FRONTEND_URL from settings
-        attendance_url = f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
+        # Change this to match your frontend route
+        attendance_url = f"{settings.FRONTEND_URL}/attendance/{session_id}"
+        
+        # Log the URL for debugging
+        logger.info(f"Generated attendance URL: {attendance_url}")
         
         # Generate QR code
         qr = qrcode.QRCode(
@@ -229,6 +233,7 @@ def test_validate_session_invalid_data(client: TestClient):
     )
     assert response.status_code == 404  # Session not found
     assert "not found" in response.json()["detail"].lower()
+
 
 
 
