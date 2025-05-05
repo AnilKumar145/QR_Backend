@@ -19,17 +19,17 @@ class Attendance(Base):
     is_valid_location = Column(Boolean, default=False)
     session_id = Column(String, ForeignKey("qr_sessions.session_id"), nullable=False)
     timestamp = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    selfie_path = Column(String, nullable=True)  # Keep existing column
-    
-    # New columns for storing selfie data directly in the database
+    selfie_path = Column(String, nullable=True)
     selfie_data = Column(LargeBinary)
     selfie_content_type = Column(String)
     
-    # Relationship
+    # Fix the relationship - use session instead of qr_session
     session = relationship("QRSession", back_populates="attendances")
     
     def __repr__(self):
         return f"<Attendance(roll_no={self.roll_no}, session_id={self.session_id})>"
+
+
 
 
 
