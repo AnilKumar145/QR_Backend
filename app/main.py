@@ -3,11 +3,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 import os
+import logging
+import traceback
+from sqlalchemy.sql import text
 
 from app.core.config import settings
 from app.api.api import api_router
 from app.core.middleware import RateLimitMiddleware
-from app.db.base import init_db
+from app.db.base import init_db, get_db
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create required directories
 os.makedirs(settings.STATIC_FILES_DIR, exist_ok=True)
@@ -27,7 +34,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/admin/login")
 # Initialize database tables
 @app.on_event("startup")
 async def startup_event():
-    init_db()
+    try:
+        logger.info("Starting application...")
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Error during startup: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 # Add Rate Limiting
 app.add_middleware(
@@ -62,3 +76,23 @@ def read_root():
         "message": f"Welcome to {settings.PROJECT_NAME} API",
         "version": settings.VERSION
     }
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint to verify the API is running"""
+    try:
+        # Test database connection
+        db = next(get_db())
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "version": settings.VERSION
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "version": settings.VERSION
+        }

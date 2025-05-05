@@ -1,6 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
+from datetime import datetime, timedelta, UTC
+import uuid
+import qrcode
+import json
+import base64
+import logging
+from io import BytesIO
+import traceback
+
+# Import models and schemas
+from app.db.base import get_db
+from app.schemas.qr_session import QRSessionCreate, QRSessionResponse
+from app.schemas.attendance import AttendanceCreate, AttendanceResponse
+from app.models.qr_session import QRSession
+from app.core.config import settings
+from app.services.geo_validation import GeoValidator, InvalidLocationException
+
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from typing import List, Dict, Any
 from fastapi.testclient import TestClient
 import pytest
 from datetime import datetime, timedelta, UTC
@@ -19,7 +40,6 @@ import logging
 from io import BytesIO
 from app.core.config import settings
 from app.services.geo_validation import GeoValidator, InvalidLocationException
-
 # Initialize logger
 logger = logging.getLogger(__name__)
 
@@ -32,6 +52,8 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
     - duration_minutes must be > 0 and <= 1440 (24 hours)
     """
     try:
+        logger.info(f"Generating QR code with duration: {duration_minutes} minutes")
+        
         # Validate duration
         if duration_minutes <= 0:
             raise HTTPException(
@@ -48,7 +70,6 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
         expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
         
         # Use the FRONTEND_URL from settings
-        # Change this to match your frontend route
         attendance_url = f"{settings.FRONTEND_URL}/attendance/{session_id}"
         
         # Log the URL for debugging
@@ -70,6 +91,7 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
         qr_image.save(buffered, format="PNG")
         qr_image_base64 = base64.b64encode(buffered.getvalue()).decode()
         
+        logger.info(f"Creating QR session in database with ID: {session_id}")
         db_session = QRSession(
             session_id=session_id,
             expires_at=expires_at,
@@ -80,9 +102,11 @@ def generate_qr_code(duration_minutes: int = Query(..., gt=0, le=1440), db: Sess
         db.commit()
         db.refresh(db_session)
         
+        logger.info(f"QR session created successfully: {session_id}")
         return db_session
     except Exception as e:
         logger.error(f"Error generating QR code: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate QR code: {str(e)}"
@@ -233,6 +257,8 @@ def test_validate_session_invalid_data(client: TestClient):
     )
     assert response.status_code == 404  # Session not found
     assert "not found" in response.json()["detail"].lower()
+
+
 
 
 
