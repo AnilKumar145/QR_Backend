@@ -22,3 +22,4 @@ def upgrade():
 def downgrade():
     op.drop_column('attendances', 'selfie_content_type')
     op.drop_column('attendances', 'selfie_data')
+

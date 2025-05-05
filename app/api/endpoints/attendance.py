@@ -4,7 +4,7 @@ from sqlalchemy import Column, DateTime
 from datetime import datetime, timezone, UTC
 from typing import Optional
 import logging
-
+import os
 from app.db.base import get_db
 from app.models.qr_session import QRSession
 from app.models.attendance import Attendance
@@ -18,23 +18,38 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Add this new endpoint to serve images directly from the database
-@router.get("/selfie/{attendance_id}", response_class=Response)
-def get_selfie(
+@router.get("/selfie/{attendance_id}")
+async def get_selfie(
     attendance_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get selfie image directly from the database"""
+    # Get the attendance record
     attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
-    
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     
+    # Check if selfie data exists in database
     if attendance.selfie_data:
-        content_type = attendance.selfie_content_type or "image/jpeg"
-        return Response(content=attendance.selfie_data, media_type=content_type)
-    else:
-        raise HTTPException(status_code=404, detail="No selfie available for this record")
+        return Response(
+            content=attendance.selfie_data,
+            media_type=attendance.selfie_content_type or "image/jpeg"
+        )
+    
+    # Fall back to file system if database data doesn't exist
+    if attendance.selfie_path:
+        try:
+            file_path = os.path.join(settings.STATIC_FILES_DIR, attendance.selfie_path.lstrip('/static/'))
+            if os.path.exists(file_path):
+                with open(file_path, "rb") as f:
+                    content = f.read()
+                return Response(
+                    content=content,
+                    media_type="image/jpeg"
+                )
+        except Exception:
+            pass
+    
+    raise HTTPException(status_code=404, detail="Selfie not found")
 
 @router.post("/mark", response_model=dict)
 async def mark_attendance(
@@ -232,6 +247,9 @@ def validate_session(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 
 

@@ -21,15 +21,18 @@ class Attendance(Base):
     timestamp = Column(DateTime(timezone=True), default=datetime.now(UTC))
     selfie_path = Column(String, nullable=True)  # Keep existing column
     
-    # Add new columns for binary storage
-    selfie_data = Column(LargeBinary, nullable=True)
-    selfie_content_type = Column(String, nullable=True)
+    # New columns for storing selfie data directly in the database
+    selfie_data = Column(LargeBinary)
+    selfie_content_type = Column(String)
     
     # Relationship
     session = relationship("QRSession", back_populates="attendances")
     
     def __repr__(self):
         return f"<Attendance(roll_no={self.roll_no}, session_id={self.session_id})>"
+
+
+
 
 
 
