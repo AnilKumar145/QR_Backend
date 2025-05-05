@@ -2,7 +2,8 @@ from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, St
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone, UTC
 
-from app.models import Base
+# Import Base from base_class instead of base
+from app.db.base_class import Base
 
 class Attendance(Base):
     __tablename__ = "attendances"
@@ -23,11 +24,15 @@ class Attendance(Base):
     selfie_data = Column(LargeBinary)
     selfie_content_type = Column(String)
     
-    # Fix the relationship - use session instead of qr_session
+    # Add relationship to QRSession
     session = relationship("QRSession", back_populates="attendances")
     
     def __repr__(self):
         return f"<Attendance(roll_no={self.roll_no}, session_id={self.session_id})>"
+
+
+
+
 
 
 

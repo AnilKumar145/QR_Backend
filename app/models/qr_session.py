@@ -1,7 +1,10 @@
 from sqlalchemy import Column, Integer, String, DateTime, func
 from sqlalchemy.orm import relationship
-from app.db.base import Base
 from datetime import datetime, UTC
+
+# Import Base from base_class instead of base
+from app.db.base_class import Base
+
 class QRSession(Base):
     __tablename__ = "qr_sessions"
 
@@ -11,7 +14,7 @@ class QRSession(Base):
     expires_at = Column(DateTime(timezone=True))
     qr_image = Column(String)
     
-    # Fix the relationship name to match what's in Attendance model
+    # Add relationship to Attendance
     attendances = relationship("Attendance", back_populates="session")
 
     def is_expired(self) -> bool:
@@ -20,6 +23,9 @@ class QRSession(Base):
 
     def __repr__(self):
         return f"<QRSession(session_id={self.session_id}, expires_at={self.expires_at})>"
+
+
+
 
 
 
