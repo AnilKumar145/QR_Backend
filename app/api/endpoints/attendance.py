@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, DateTime
 from datetime import datetime, timezone, UTC
@@ -17,6 +17,24 @@ from app.services.geo_validation import GeoValidator
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Add this new endpoint to serve images directly from the database
+@router.get("/selfie/{attendance_id}", response_class=Response)
+def get_selfie(
+    attendance_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get selfie image directly from the database"""
+    attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    
+    if attendance.selfie_data:
+        content_type = attendance.selfie_content_type or "image/jpeg"
+        return Response(content=attendance.selfie_data, media_type=content_type)
+    else:
+        raise HTTPException(status_code=404, detail="No selfie available for this record")
 
 @router.post("/mark", response_model=dict)
 async def mark_attendance(
@@ -214,6 +232,11 @@ def validate_session(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
 
 
 

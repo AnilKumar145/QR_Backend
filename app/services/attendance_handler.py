@@ -60,7 +60,7 @@ class AttendanceHandler:
 
             logger.info(f"Location validation result: valid={is_valid_location}, distance={distance:.2f}km")
 
-            # Save selfie - use CloudStorage instead of ImageSaver
+            # Save selfie to Cloudinary or local storage
             selfie_path = await CloudStorage.upload_selfie(
                 selfie,
                 attendance_data.roll_no,
@@ -68,12 +68,18 @@ class AttendanceHandler:
             )
             
             logger.info(f"Selfie saved at: {selfie_path}")
+            
+            # Also store the selfie data in the database
+            await selfie.seek(0)  # Reset file position
+            selfie_content = await selfie.read()
 
             # Create attendance record
             attendance_dict = attendance_data.dict()
             attendance = Attendance(
                 **attendance_dict,
-                selfie_path=selfie_path,
+                selfie_path=selfie_path,  # Keep storing the path
+                selfie_data=selfie_content,  # Also store the binary data
+                selfie_content_type=selfie.content_type,
                 is_valid_location=is_valid_location,
                 timestamp=datetime.now(UTC)
             )
@@ -117,6 +123,7 @@ class AttendanceHandler:
         except Exception as e:
             logger.error(f"Error in process_attendance: {str(e)}")
             return False, str(e)
+
 
 
 
