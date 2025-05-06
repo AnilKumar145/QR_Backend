@@ -47,3 +47,4 @@ finally:
     # Clean up the temporary file
     if os.path.exists("alembic_prod.ini"):
         os.remove("alembic_prod.ini")
+

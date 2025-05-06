@@ -91,6 +91,7 @@ class AttendanceHandler:
             if not is_valid_location:
                 flagged_log = FlaggedLog(
                     session_id=attendance_data.session_id,
+                    roll_no=attendance_data.roll_no,  # Add roll_no here
                     reason="Invalid Location",
                     details=f"Distance from institution: {distance:.2f} km"
                 )
@@ -123,6 +124,7 @@ class AttendanceHandler:
         except Exception as e:
             logger.error(f"Error in process_attendance: {str(e)}")
             return False, str(e)
+
 
 
 

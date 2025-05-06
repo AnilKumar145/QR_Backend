@@ -9,11 +9,14 @@ class FlaggedLog(Base):
     __tablename__ = "flagged_logs"
     
     id = Column(Integer, primary_key=True, index=True)
-    roll_no = Column(String, index=True)
     session_id = Column(String, index=True)
+    roll_no = Column(String, index=True)  # Added roll_no column
     timestamp = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    reason = Column(Text)
+    reason = Column(String)
+    details = Column(Text, nullable=True)
     
     def __repr__(self):
-        return f"<FlaggedLog(roll_no={self.roll_no}, session_id={self.session_id})>"
+        return f"<FlaggedLog(session_id={self.session_id}, roll_no={self.roll_no})>"
+
+
 

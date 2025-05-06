@@ -194,16 +194,47 @@ def get_daily_statistics(
 def get_flagged_logs(
     skip: int = 0,
     limit: int = 100,
+    roll_no: str = None,  # Add roll_no as an optional filter parameter
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get all flagged attendance logs"""
-    logs = db.query(FlaggedLog)\
-        .order_by(FlaggedLog.timestamp.desc())\
-        .offset(skip)\
-        .limit(limit)\
-        .all()
-    return logs
+    try:
+        # Start with a base query
+        query = db.query(
+            FlaggedLog.id,
+            FlaggedLog.session_id,
+            FlaggedLog.roll_no,
+            FlaggedLog.timestamp,
+            FlaggedLog.reason,
+            FlaggedLog.details
+        )
+        
+        # Apply roll_no filter if provided
+        if roll_no:
+            query = query.filter(FlaggedLog.roll_no == roll_no)
+        
+        # Execute the query with ordering, offset and limit
+        logs = query.order_by(FlaggedLog.timestamp.desc())\
+            .offset(skip)\
+            .limit(limit)\
+            .all()
+        
+        # Convert to dict to handle any serialization issues
+        result = []
+        for log in logs:
+            result.append({
+                "id": log.id,
+                "session_id": log.session_id,
+                "roll_no": log.roll_no,
+                "reason": log.reason,
+                "details": log.details if hasattr(log, 'details') else "",
+                "timestamp": log.timestamp.isoformat() if log.timestamp else None
+            })
+        
+        return {"flagged_logs": result, "total": len(result)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving flagged logs: {str(e)}")
 
 @router.get("/statistics/summary")
 def get_statistics_summary(
@@ -279,5 +310,8 @@ def get_statistics_summary(
                 "invalid_locations": 0
             }
         }
+
+
+
 
 
