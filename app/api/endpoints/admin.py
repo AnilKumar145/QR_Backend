@@ -242,74 +242,37 @@ def get_statistics_summary(
     current_user: dict = Depends(get_current_user)
 ) -> Dict:
     """Get summary statistics for attendance"""
-    import logging
-    from datetime import timezone, datetime, timedelta
-    import pytz
-    
-    logger = logging.getLogger(__name__)
-    
     try:
-        # Use IST timezone (UTC+5:30) to match the database timestamps
-        ist = pytz.timezone('Asia/Kolkata')
-        now = datetime.now(ist)
-        today = now.date()
+        # Get total attendance count
+        total_attendance = db.query(Attendance).count()
         
-        # Get total counts
-        total_attendance = db.query(func.count(Attendance.id)).scalar() or 0
-        valid_locations = db.query(func.count(Attendance.id)).filter(Attendance.is_valid_location == True).scalar() or 0
-        invalid_locations = db.query(func.count(Attendance.id)).filter(Attendance.is_valid_location == False).scalar() or 0
+        # Get valid locations count
+        valid_locations = db.query(Attendance).filter(Attendance.is_valid_location == True).count()
         
-        # Get today's counts using SQL with proper timezone handling
-        query = text("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN is_valid_location = TRUE THEN 1 ELSE 0 END) as valid,
-                SUM(CASE WHEN is_valid_location = FALSE THEN 1 ELSE 0 END) as invalid
-            FROM 
-                attendances
-            WHERE 
-                DATE(timestamp) = :today
-        """)
-        
-        today_result = db.execute(query, {"today": today.strftime("%Y-%m-%d")}).fetchone()
-        
-        today_attendance = today_result[0] or 0
-        today_valid = today_result[1] or 0
-        today_invalid = today_result[2] or 0
+        # Get invalid locations count
+        invalid_locations = db.query(Attendance).filter(Attendance.is_valid_location == False).count()
         
         # Get unique students count
-        unique_students = db.query(func.count(func.distinct(Attendance.roll_no))).scalar() or 0
+        unique_students = db.query(Attendance.roll_no).distinct().count()
         
+        # Get today's attendance count
+        today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())
+        today_attendance = db.query(Attendance).filter(Attendance.timestamp >= today_start).count()
+        
+        # Return the statistics
         return {
-            "total": {
-                "attendance": total_attendance,
-                "valid_locations": valid_locations,
-                "invalid_locations": invalid_locations,
-                "unique_students": unique_students
-            },
-            "today": {
-                "attendance": today_attendance,
-                "valid_locations": today_valid,
-                "invalid_locations": today_invalid
-            }
+            "total_attendance": total_attendance,
+            "valid_locations": valid_locations,
+            "invalid_locations": invalid_locations,
+            "unique_students": unique_students,
+            "today_attendance": today_attendance,
+            "flagged_logs": db.query(FlaggedLog).count()
         }
     except Exception as e:
-        logger.error(f"Error getting summary statistics: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return {
-            "total": {
-                "attendance": 0,
-                "valid_locations": 0,
-                "invalid_locations": 0,
-                "unique_students": 0
-            },
-            "today": {
-                "attendance": 0,
-                "valid_locations": 0,
-                "invalid_locations": 0
-            }
-        }
+        raise HTTPException(status_code=500, detail=f"Error retrieving statistics: {str(e)}")
+
+
 
 
 
