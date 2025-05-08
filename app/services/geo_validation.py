@@ -101,29 +101,34 @@ class GeoValidator:
             )
             
             if distance_meters > self.max_distance_m:
+                # Create a more detailed exception with all parameters
                 raise InvalidLocationException(
-                    distance_meters, 
-                    lat, 
-                    lon, 
-                    f"You are {distance_meters:.0f} meters away from the venue. "
-                    f"Maximum allowed distance is {self.max_distance_m} meters. "
-                    f"Please ensure you are within venue boundaries."
+                    distance=distance_meters, 
+                    lat=lat, 
+                    lon=lon, 
+                    venue_lat=self.venue_lat,
+                    venue_lon=self.venue_lon,
+                    venue_name="venue",  # Generic name, can be overridden in endpoints
+                    max_distance=self.max_distance_m,
+                    message=f"You are {distance_meters:.0f} meters away from the venue. "
+                            f"Maximum allowed distance is {self.max_distance_m} meters. "
+                            f"Please ensure you are within venue boundaries."
                 )
 
             return True, distance_meters
 
-        except Exception as e:
-            if not isinstance(e, InvalidLocationException):
-                logger.error(f"Location validation error: {str(e)}")
-                raise InvalidLocationException(0, lat, lon, str(e))
+        except InvalidLocationException:
+            # Re-raise the exception without modification
             raise
-
-
-
-
-
-
-
+        except Exception as e:
+            logger.error(f"Location validation error: {str(e)}")
+            # Create a simple exception with just the error message
+            raise InvalidLocationException(
+                distance=0, 
+                lat=lat, 
+                lon=lon, 
+                message=f"Location validation failed: {str(e)}"
+            )
 
 
 

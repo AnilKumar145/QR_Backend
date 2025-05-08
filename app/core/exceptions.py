@@ -43,11 +43,11 @@ class InvalidLocationException(Exception):
         distance: float, 
         lat: float, 
         lon: float, 
+        message: str = None,
         venue_lat: float = None,
         venue_lon: float = None,
         venue_name: str = None,
-        max_distance: float = None,
-        message: str = None
+        max_distance: float = None
     ):
         self.distance = distance
         self.lat = lat
@@ -58,31 +58,47 @@ class InvalidLocationException(Exception):
         self.max_distance = max_distance
         
         if not message:
+            # Handle the case where venue_name or max_distance might be None
             venue_text = f"from {venue_name}" if venue_name else "from institution"
-            message = f"Invalid location. You are {distance:.0f} meters {venue_text}. Maximum allowed distance is {max_distance:.0f} meters."
+            
+            if distance is not None and max_distance is not None:
+                message = f"Invalid location. You are {distance:.0f} meters {venue_text}. Maximum allowed distance is {max_distance:.0f} meters."
+            elif distance is not None:
+                message = f"Invalid location. You are {distance:.0f} meters {venue_text}."
+            else:
+                message = f"Invalid location. Please ensure you are within venue boundaries."
         
         self.message = message
         super().__init__(self.message)
-        
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert exception to a structured dictionary for API responses"""
-        return {
-            "error": "location_out_of_range",
+    
+    def to_dict(self):
+        """Convert exception to a dictionary for API responses"""
+        result = {
+            "error": "invalid_location",
             "message": self.message,
             "details": {
-                "your_location": {
+                "user_coordinates": {
                     "lat": self.lat,
                     "lon": self.lon
                 },
-                "venue_location": {
-                    "lat": self.venue_lat,
-                    "lon": self.venue_lon,
-                    "name": self.venue_name
-                } if self.venue_lat and self.venue_lon else None,
-                "distance": round(self.distance),
-                "max_allowed_distance": round(self.max_distance) if self.max_distance else None
+                "distance_meters": self.distance
             }
         }
+        
+        # Add venue information if available
+        if self.venue_lat is not None and self.venue_lon is not None:
+            result["details"]["venue_coordinates"] = {
+                "lat": self.venue_lat,
+                "lon": self.venue_lon
+            }
+        
+        if self.venue_name:
+            result["details"]["venue_name"] = self.venue_name
+            
+        if self.max_distance:
+            result["details"]["max_allowed_distance_meters"] = self.max_distance
+            
+        return result
 
 class InvalidCoordinateException(AttendanceException):
     def __init__(self, lat: Optional[float] = None, lon: Optional[float] = None, message: Optional[str] = None):
@@ -116,6 +132,7 @@ class FileTypeNotAllowedException(InvalidFileException):
         super().__init__(
             message=f"File type '{content_type}' not allowed. Allowed types: {', '.join(allowed_types)}"
         )
+
 
 
 
