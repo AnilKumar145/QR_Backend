@@ -1,19 +1,31 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime
+from typing import Optional
 
 class VenueBase(BaseModel):
     name: str
-    latitude: float = Field(..., ge=-90, le=90)
-    longitude: float = Field(..., ge=-180, le=180)
-    radius_meters: float = Field(..., gt=0, le=10000)  # Maximum 10km radius
+    institution_id: int
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    radius_meters: Optional[float] = None
 
 class VenueCreate(VenueBase):
-    institution_id: int
+    pass
+
+class VenueUpdate(VenueBase):
+    name: Optional[str] = None
+    institution_id: Optional[int] = None
 
 class VenueResponse(VenueBase):
     id: int
-    institution_id: int
     
     class Config:
-        from_attributes = True
+        orm_mode = True
+
+class VenueListResponse(BaseModel):
+    id: int
+    name: str
+    institution_name: str
+    
+    class Config:
+        orm_mode = True
+
