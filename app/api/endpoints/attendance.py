@@ -5,12 +5,26 @@ from datetime import datetime, timezone, UTC
 from typing import Optional
 import logging
 import os
+import traceback
 from app.db.base import get_db
 from app.models.qr_session import QRSession
 from app.models.attendance import Attendance
+from app.models.venue import Venue
+from app.models.flagged_log import FlaggedLog
 from app.schemas.attendance import AttendanceCreate, AttendanceResponse
 from app.services.attendance_handler import AttendanceHandler
-from app.core.exceptions import AttendanceException, InvalidLocationException
+from app.core.exceptions import (
+    AttendanceException,
+    InvalidLocationException,
+    SessionNotFoundException,
+    SessionExpiredException,
+    DuplicateAttendanceException,
+    InvalidCoordinateException,
+    CoordinatePrecisionException,
+    InvalidFileException,
+    FileSizeTooLargeException,
+    FileTypeNotAllowedException
+)
 from app.core.config import settings
 from app.services.geo_validation import GeoValidator
 
@@ -67,9 +81,37 @@ async def mark_attendance(
 ):
     logger.info(f"\n=== Starting attendance marking process for session {session_id} ===")
     logger.info(f"Raw coordinates received: lat={location_lat} ({type(location_lat)}), lon={location_lon} ({type(location_lon)})")
-    logger.info(f"Institution coordinates from settings: lat={settings.INSTITUTION_LAT}, lon={settings.INSTITUTION_LON}")
 
     try:
+        # Validate file size
+        selfie_content = await selfie.read()
+        selfie_size = len(selfie_content)
+        await selfie.seek(0)  # Reset file position
+        
+        if selfie_size > settings.MAX_SELFIE_SIZE:
+            raise FileSizeTooLargeException(selfie_size, settings.MAX_SELFIE_SIZE)
+            
+        # Validate file type
+        allowed_types = ["image/jpeg", "image/png", "image/jpg"]
+        if selfie.content_type not in allowed_types:
+            raise FileTypeNotAllowedException(selfie.content_type, allowed_types)
+
+        # Validate coordinate precision
+        lat_str = str(abs(float(location_lat)))
+        lon_str = str(abs(float(location_lon)))
+        
+        lat_decimals = len(lat_str.split('.')[-1]) if '.' in lat_str else 0
+        lon_decimals = len(lon_str.split('.')[-1]) if '.' in lon_str else 0
+        
+        if lat_decimals > 7 or lon_decimals > 7:
+            raise CoordinatePrecisionException(lat_decimals, lon_decimals)
+
+        # Basic range validation
+        if not (-90 <= location_lat <= 90):
+            raise InvalidCoordinateException(lat=location_lat)
+        if not (-180 <= location_lon <= 180):
+            raise InvalidCoordinateException(lon=location_lon)
+
         # Round coordinates to 7 decimal places
         location_lat = round(float(location_lat), 7)
         location_lon = round(float(location_lon), 7)
@@ -80,14 +122,34 @@ async def mark_attendance(
         qr_session = session.query(QRSession).filter_by(session_id=session_id).first()
         if not qr_session:
             logger.error(f"Session not found in database: {session_id}")
-            raise HTTPException(status_code=404, detail="QR session not found")
+            # Log the invalid session
+            flagged_log = FlaggedLog(
+                session_id=session_id,
+                roll_no=roll_no,
+                reason="Session Not Found",
+                details=f"Session ID not found in database"
+            )
+            session.add(flagged_log)
+            session.commit()
+            
+            raise SessionNotFoundException(session_id)
         
         logger.info(f"Session found: {qr_session}")
         logger.info(f"Session expiry: {qr_session.expires_at}")
         
         if qr_session.is_expired():
             logger.error(f"Session expired: {session_id}")
-            raise HTTPException(status_code=400, detail="QR session has expired")
+            # Log the expired session
+            flagged_log = FlaggedLog(
+                session_id=session_id,
+                roll_no=roll_no,
+                reason="Expired Session",
+                details=f"Attempted to use expired session. Expired at: {qr_session.expires_at}"
+            )
+            session.add(flagged_log)
+            session.commit()
+            
+            raise SessionExpiredException(str(qr_session.expires_at))
 
         # Step 2: Duplicate check
         existing = session.query(Attendance).filter_by(
@@ -97,40 +159,76 @@ async def mark_attendance(
         
         if existing:
             logger.error(f"Duplicate attendance for roll no {roll_no} in session {session_id}")
-            raise HTTPException(
-                status_code=400,
-                detail="Attendance already marked for this session"
+            # Log the duplicate attendance
+            flagged_log = FlaggedLog(
+                session_id=session_id,
+                roll_no=roll_no,
+                reason="Duplicate Attendance",
+                details=f"Attempted to mark attendance again. Original timestamp: {existing.timestamp}"
+            )
+            session.add(flagged_log)
+            session.commit()
+            
+            raise DuplicateAttendanceException(
+                roll_no=roll_no,
+                session_id=session_id,
+                timestamp=str(existing.timestamp)
             )
 
-        # Step 3: Coordinate validation and conversion
+        # Step 3: Get venue for location validation
+        venue = None
+        if qr_session.venue_id:
+            venue = session.query(Venue).filter_by(id=qr_session.venue_id).first()
+            logger.info(f"Using venue for validation: {venue.name if venue else 'None'}")
+        
+        # Step 4: Validate location
+        geo_validator = GeoValidator(venue)
         try:
-            # Validate decimal places before rounding
-            if len(str(abs(float(location_lat))).split('.')[-1]) > 7 or \
-               len(str(abs(float(location_lon))).split('.')[-1]) > 7:
-                raise ValueError("Coordinates must not exceed 7 decimal places")
+            is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
+            logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
+            
+            if not is_valid:
+                # Create venue-specific error
+                venue_name = venue.name if venue else "campus"
+                max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
                 
-            location_lat = float(location_lat)
-            location_lon = float(location_lon)
-            
-            # Round to 7 decimal places for consistency
-            location_lat = round(location_lat, 7)
-            location_lon = round(location_lon, 7)
-            
-            logger.info(f"Processed coordinates: lat={location_lat}, lon={location_lon}")
-            
-            if not (-90 <= location_lat <= 90):
-                raise ValueError(f"Latitude {location_lat} out of valid range (-90 to 90)")
-            if not (-180 <= location_lon <= 180):
-                raise ValueError(f"Longitude {location_lon} out of valid range (-180 to 180)")
+                # Log the invalid location
+                flagged_log = FlaggedLog(
+                    session_id=session_id,
+                    roll_no=roll_no,
+                    reason="Location Out of Range",
+                    details=(
+                        f"Distance: {distance:.0f}m from {venue_name}. "
+                        f"Max allowed: {max_distance}m. "
+                        f"User location: {location_lat}, {location_lon}. "
+                        f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
+                        f"{venue.longitude if venue else settings.INSTITUTION_LON}"
+                    )
+                )
+                session.add(flagged_log)
+                session.commit()
                 
-        except (ValueError, TypeError) as e:
-            logger.error(f"Coordinate validation error: {str(e)}")
+                # Raise detailed exception
+                raise InvalidLocationException(
+                    distance=distance,
+                    lat=location_lat,
+                    lon=location_lon,
+                    venue_lat=venue.latitude if venue else settings.INSTITUTION_LAT,
+                    venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
+                    venue_name=venue_name,
+                    max_distance=max_distance
+                )
+                
+        except InvalidLocationException as e:
+            logger.error(f"Location validation failed: {str(e)}")
+            
+            # Log is already done above
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid coordinate format: {str(e)}"
+                detail=e.to_dict()
             )
 
-        # Step 4: Create attendance data
+        # Step 6: Create attendance data
         attendance_data = AttendanceCreate(
             session_id=session_id,
             name=name,
@@ -143,7 +241,7 @@ async def mark_attendance(
             location_lon=location_lon
         )
 
-        # Step 5: Process attendance
+        # Step 7: Process attendance
         attendance_handler = AttendanceHandler(session)
         try:
             success, message = await attendance_handler.process_attendance(
@@ -153,7 +251,13 @@ async def mark_attendance(
             
             if not success:
                 logger.error(f"Attendance processing failed: {message}")
-                raise HTTPException(status_code=400, detail=message)
+                raise HTTPException(
+                    status_code=400, 
+                    detail={
+                        "error": "attendance_processing_failed",
+                        "message": message
+                    }
+                )
                 
             return {"success": True, "message": message}
             
@@ -161,28 +265,38 @@ async def mark_attendance(
             logger.error(f"Location validation failed: {str(le)}")
             raise HTTPException(
                 status_code=400,
-                detail=str(le)
+                detail=le.to_dict()
             )
         except AttendanceException as ae:
             logger.error(f"Attendance error: {str(ae)}")
-            raise HTTPException(
-                status_code=400,
-                detail=str(ae)
-            )
+            raise ae
         except Exception as e:
             logger.error(f"Attendance processing error: {str(e)}")
             raise HTTPException(
-                status_code=400,  # Changed from 500 to 400 for client-related errors
-                detail=str(e)
+                status_code=400,
+                detail={
+                    "error": "attendance_processing_error",
+                    "message": str(e)
+                }
             )
             
-    except HTTPException as he:
-        raise he
+    except (SessionNotFoundException, SessionExpiredException, 
+            DuplicateAttendanceException, InvalidCoordinateException,
+            CoordinatePrecisionException, FileSizeTooLargeException,
+            FileTypeNotAllowedException) as e:
+        # These exceptions already have the right format
+        raise e
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error in attendance marking: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
-            detail=f"Unexpected error: {str(e)}"
+            detail={
+                "error": "internal_server_error",
+                "message": f"Unexpected error: {str(e)}"
+            }
         )
 
 @router.post("/validate", response_model=AttendanceResponse)
@@ -247,6 +361,16 @@ def validate_session(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -7,6 +7,7 @@ import logging
 from app.models.attendance import Attendance
 from app.models.qr_session import QRSession
 from app.models.flagged_log import FlaggedLog
+from app.models.venue import Venue
 from app.schemas.attendance import AttendanceCreate
 from app.services.geo_validation import GeoValidator
 from app.utils.image_saver import ImageSaver
@@ -19,7 +20,6 @@ logger = logging.getLogger(__name__)
 class AttendanceHandler:
     def __init__(self, db: Session):
         self.db = db
-        self.geo_validator = GeoValidator()
         self.image_saver = ImageSaver()
 
     def validate_session(self, session_id: str) -> Optional[QRSession]:
@@ -37,28 +37,37 @@ class AttendanceHandler:
         selfie: UploadFile
     ) -> Tuple[bool, str]:
         try:
-            # Add debug logging
-            logger.info(f"Received coordinates - Lat: {attendance_data.location_lat}, Lon: {attendance_data.location_lon}")
-            logger.info(f"Campus coordinates - Lat: {self.geo_validator.INSTITUTION_LAT}, Lon: {self.geo_validator.INSTITUTION_LON}")
-
             # Validate session
             session = self.validate_session(attendance_data.session_id)
             if not session:
                 logger.error(f"Invalid or expired session: {attendance_data.session_id}")
                 return False, "Invalid or expired session"
 
+            # Get venue if available
+            venue = None
+            if session.venue_id:
+                venue = self.db.query(Venue).filter_by(id=session.venue_id).first()
+                logger.info(f"Using venue for validation: {venue.name if venue else 'None'}")
+
+            # Create GeoValidator with venue if available
+            geo_validator = GeoValidator(venue)
+
+            # Add debug logging
+            logger.info(f"Received coordinates - Lat: {attendance_data.location_lat}, Lon: {attendance_data.location_lon}")
+            logger.info(f"Venue/Campus coordinates - Lat: {geo_validator.venue_lat}, Lon: {geo_validator.venue_lon}")
+
             # Validate location and reject if invalid
             try:
-                is_valid_location, distance = self.geo_validator.is_location_valid(
+                is_valid_location, distance = geo_validator.is_location_valid(
                     attendance_data.location_lat,
                     attendance_data.location_lon
                 )
-                logger.info(f"Calculated distance: {distance} km")
+                logger.info(f"Calculated distance: {distance} meters")
             except InvalidLocationException as e:
                 logger.error(f"Invalid location: {str(e)}")
                 return False, str(e)
 
-            logger.info(f"Location validation result: valid={is_valid_location}, distance={distance:.2f}km")
+            logger.info(f"Location validation result: valid={is_valid_location}, distance={distance:.2f}m")
 
             # Save selfie to Cloudinary or local storage
             selfie_path = await CloudStorage.upload_selfie(
@@ -124,6 +133,7 @@ class AttendanceHandler:
         except Exception as e:
             logger.error(f"Error in process_attendance: {str(e)}")
             return False, str(e)
+
 
 
 

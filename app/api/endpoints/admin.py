@@ -12,9 +12,14 @@ from passlib.context import CryptContext
 from app.db.base import get_db
 from app.schemas.attendance import AttendanceResponse
 from app.schemas.admin import AdminLoginResponse, AdminCreateRequest
+from app.schemas.institution import InstitutionResponse, InstitutionCreate
+from app.schemas.venue import VenueResponse, VenueCreate
 from app.models.attendance import Attendance
 from app.models.flagged_log import FlaggedLog
 from app.models.admin_user import AdminUser
+from app.models.institution import Institution
+from app.models.venue import Venue
+from app.models.qr_session import QRSession  # Import QRSession model
 from app.core.dependencies import get_current_user
 from app.core.security import create_access_token
 
@@ -272,9 +277,153 @@ def get_statistics_summary(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving statistics: {str(e)}")
 
+# Institution endpoints
+@router.post("/institutions", response_model=InstitutionResponse)
+def create_institution(institution: InstitutionCreate, db: Session = Depends(get_db)):
+    """Create a new institution"""
+    db_institution = Institution(name=institution.name, city=institution.city)
+    db.add(db_institution)
+    db.commit()
+    db.refresh(db_institution)
+    return db_institution
 
+@router.get("/institutions", response_model=List[InstitutionResponse])
+def get_institutions(db: Session = Depends(get_db)):
+    """Get all institutions"""
+    return db.query(Institution).all()
 
+@router.get("/institutions/{institution_id}", response_model=InstitutionResponse)
+def get_institution(institution_id: int, db: Session = Depends(get_db)):
+    """Get institution by ID"""
+    institution = db.query(Institution).filter(Institution.id == institution_id).first()
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    return institution
 
+# Venue endpoints
+@router.post("/venues", response_model=VenueResponse)
+def create_venue(venue: VenueCreate, db: Session = Depends(get_db)):
+    """Create a new venue"""
+    # Check if institution exists
+    institution = db.query(Institution).filter(Institution.id == venue.institution_id).first()
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    
+    db_venue = Venue(
+        institution_id=venue.institution_id,
+        name=venue.name,
+        latitude=venue.latitude,
+        longitude=venue.longitude,
+        radius_meters=venue.radius_meters
+    )
+    db.add(db_venue)
+    db.commit()
+    db.refresh(db_venue)
+    return db_venue
 
+@router.get("/venues", response_model=List[VenueResponse])
+def get_venues(institution_id: int = None, db: Session = Depends(get_db)):
+    """Get all venues, optionally filtered by institution_id"""
+    query = db.query(Venue)
+    if institution_id:
+        query = query.filter(Venue.institution_id == institution_id)
+    return query.all()
+
+@router.get("/venues/{venue_id}", response_model=VenueResponse)
+def get_venue(venue_id: int, db: Session = Depends(get_db)):
+    """Get venue by ID"""
+    venue = db.query(Venue).filter(Venue.id == venue_id).first()
+    if not venue:
+        raise HTTPException(status_code=404, detail="Venue not found")
+    return venue
+
+@router.get("/venues/by-institution/{institution_id}", response_model=List[VenueResponse])
+def get_venues_by_institution(
+    institution_id: int, 
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all venues for a specific institution"""
+    venues = db.query(Venue).filter(Venue.institution_id == institution_id).all()
+    if not venues:
+        return []
+    return venues
+
+@router.get("/statistics/by-venue/{venue_id}")
+def get_venue_statistics(
+    venue_id: int,
+    days: int = Query(7, ge=1, le=30),
+    db: Session = Depends(get_db)
+):
+    """Get attendance statistics for a specific venue"""
+    # Check if venue exists
+    venue = db.query(Venue).filter(Venue.id == venue_id).first()
+    if not venue:
+        raise HTTPException(status_code=404, detail="Venue not found")
+    
+    # Calculate date range
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    
+    # Get QR sessions for this venue
+    sessions = db.query(QRSession).filter(
+        QRSession.venue_id == venue_id,
+        QRSession.created_at >= start_date,
+        QRSession.created_at <= end_date
+    ).all()
+    
+    session_ids = [session.session_id for session in sessions]
+    
+    # Get attendance records for these sessions
+    attendance_records = db.query(Attendance).filter(
+        Attendance.session_id.in_(session_ids)
+    ).all()
+    
+    # Get flagged logs for these sessions
+    flagged_logs = db.query(FlaggedLog).filter(
+        FlaggedLog.session_id.in_(session_ids)
+    ).all()
+    
+    # Organize by date
+    attendance_by_date = {}
+    for record in attendance_records:
+        date_str = record.timestamp.strftime("%Y-%m-%d")
+        if date_str not in attendance_by_date:
+            attendance_by_date[date_str] = 0
+        attendance_by_date[date_str] += 1
+    
+    # Organize flagged logs by reason
+    flagged_by_reason = {}
+    for log in flagged_logs:
+        if log.reason not in flagged_by_reason:
+            flagged_by_reason[log.reason] = 0
+        flagged_by_reason[log.reason] += 1
+    
+    return {
+        "venue": {
+            "id": venue.id,
+            "name": venue.name,
+            "latitude": venue.latitude,
+            "longitude": venue.longitude,
+            "radius_meters": venue.radius_meters
+        },
+        "date_range": {
+            "start": start_date.strftime("%Y-%m-%d"),
+            "end": end_date.strftime("%Y-%m-%d"),
+            "days": days
+        },
+        "sessions": {
+            "total": len(sessions),
+            "session_ids": session_ids
+        },
+        "attendance": {
+            "total": len(attendance_records),
+            "by_date": attendance_by_date
+        },
+        "flagged_logs": {
+            "total": len(flagged_logs),
+            "by_reason": flagged_by_reason
+        }
+    }
 
 

@@ -1,17 +1,26 @@
 from math import radians, sin, cos, sqrt, atan2
-from typing import Tuple
+from typing import Tuple, Optional
 from app.core.config import settings
 from app.core.exceptions import InvalidLocationException
 import logging
+from app.models.venue import Venue
 
 logger = logging.getLogger(__name__)
 
 class GeoValidator:
-    def __init__(self):
-        self.INSTITUTION_LAT = float(settings.INSTITUTION_LAT)
-        self.INSTITUTION_LON = float(settings.INSTITUTION_LON)
-        self.MAX_DISTANCE_M = float(settings.GEOFENCE_RADIUS_M)
-        logger.info(f"GeoValidator initialized with institution coordinates: {self.INSTITUTION_LAT}, {self.INSTITUTION_LON}")
+    def __init__(self, venue: Optional[Venue] = None):
+        # Use venue coordinates if provided, otherwise fall back to default
+        if venue:
+            self.venue_lat = venue.latitude
+            self.venue_lon = venue.longitude
+            self.max_distance_m = venue.radius_meters
+            logger.info(f"GeoValidator initialized with venue coordinates: {self.venue_lat}, {self.venue_lon}, radius: {self.max_distance_m}m")
+        else:
+            # Fallback to institution settings (for backward compatibility)
+            self.venue_lat = float(settings.INSTITUTION_LAT)
+            self.venue_lon = float(settings.INSTITUTION_LON)
+            self.max_distance_m = float(settings.GEOFENCE_RADIUS_M)
+            logger.info(f"GeoValidator initialized with default coordinates: {self.venue_lat}, {self.venue_lon}")
 
     def calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Calculate distance between two points in meters using Haversine formula"""
@@ -69,7 +78,7 @@ class GeoValidator:
             raise
 
     def is_location_valid(self, lat: float, lon: float) -> Tuple[bool, float]:
-        """Check if given location is within allowed radius"""
+        """Check if given location is within allowed radius of the venue"""
         logger.info("\n=== Location Validation Start ===")
         try:
             # Basic range validation
@@ -85,23 +94,20 @@ class GeoValidator:
                 )
 
             distance_meters = self.calculate_distance(
-                self.INSTITUTION_LAT,
-                self.INSTITUTION_LON,
+                self.venue_lat,
+                self.venue_lon,
                 lat,
                 lon
             )
             
-            # Remove the suspicious distance check - allow very close locations
-            # This was causing legitimate attendance to be rejected
-            
-            if distance_meters > self.MAX_DISTANCE_M:
+            if distance_meters > self.max_distance_m:
                 raise InvalidLocationException(
                     distance_meters, 
                     lat, 
                     lon, 
-                    f"You are {distance_meters:.0f} meters away from campus. "
-                    f"Maximum allowed distance is {self.MAX_DISTANCE_M} meters. "
-                    f"Please ensure you are within campus boundaries."
+                    f"You are {distance_meters:.0f} meters away from the venue. "
+                    f"Maximum allowed distance is {self.max_distance_m} meters. "
+                    f"Please ensure you are within venue boundaries."
                 )
 
             return True, distance_meters
@@ -111,6 +117,9 @@ class GeoValidator:
                 logger.error(f"Location validation error: {str(e)}")
                 raise InvalidLocationException(0, lat, lon, str(e))
             raise
+
+
+
 
 
 

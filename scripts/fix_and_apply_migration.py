@@ -32,13 +32,12 @@ try:
     table_exists = cursor.fetchone()[0]
     
     if table_exists:
-        # Get current version
-        cursor.execute("SELECT version_num FROM alembic_version")
-        versions = cursor.fetchall()
-        print(f"Current versions in alembic_version table: {versions}")
+        # Drop and recreate the table
+        cursor.execute("DROP TABLE alembic_version")
+        print("Dropped existing alembic_version table")
         
         # Update to a known good version
-        cursor.execute("DELETE FROM alembic_version")
+        cursor.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
         cursor.execute("""
             INSERT INTO alembic_version (version_num) 
             VALUES ('2b478ceed7f7')
@@ -79,6 +78,76 @@ alembic_config = alembic_config.replace(
 # Write to a temporary file
 with open("alembic_fixed.ini", "w") as f:
     f.write(alembic_config)
+
+# Create a manual migration file for institutions and venues
+migration_content = """\"\"\"add_institutions_and_venues_manual
+
+Revision ID: add_institutions_venues
+Revises: 2b478ceed7f7
+Create Date: 2023-05-15 12:00:00.000000
+
+\"\"\"
+from typing import Sequence, Union
+from alembic import op
+import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision: str = 'add_institutions_venues'
+down_revision: Union[str, None] = '2b478ceed7f7'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    \"\"\"Upgrade schema.\"\"\"
+    # Create institutions table
+    op.create_table(
+        'institutions',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('city', sa.String(), nullable=False),
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('name')
+    )
+    
+    # Create venues table
+    op.create_table(
+        'venues',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('institution_id', sa.Integer(), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('latitude', sa.Float(), nullable=False),
+        sa.Column('longitude', sa.Float(), nullable=False),
+        sa.Column('radius_meters', sa.Float(), nullable=False),
+        sa.ForeignKeyConstraint(['institution_id'], ['institutions.id'], ),
+        sa.PrimaryKeyConstraint('id')
+    )
+    
+    # Add venue_id to qr_sessions
+    op.add_column('qr_sessions', sa.Column('venue_id', sa.Integer(), nullable=True))
+    op.create_foreign_key('fk_qr_sessions_venue_id', 'qr_sessions', 'venues', ['venue_id'], ['id'])
+
+
+def downgrade() -> None:
+    \"\"\"Downgrade schema.\"\"\"
+    # Remove foreign key and column from qr_sessions
+    op.drop_constraint('fk_qr_sessions_venue_id', 'qr_sessions', type_='foreignkey')
+    op.drop_column('qr_sessions', 'venue_id')
+    
+    # Drop venues table
+    op.drop_table('venues')
+    
+    # Drop institutions table
+    op.drop_table('institutions')
+"""
+
+# Create the migration file directly
+os.makedirs("alembic/versions", exist_ok=True)
+migration_path = "alembic/versions/add_institutions_venues_manual.py"
+with open(migration_path, "w") as f:
+    f.write(migration_content)
+
+print(f"Created migration file: {migration_path}")
 
 try:
     # Run alembic commands with the temporary config

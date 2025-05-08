@@ -1,8 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy import Column, Integer, String, DateTime, func, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, UTC
 
-# Import Base from base_class instead of base
 from app.db.base_class import Base
 
 class QRSession(Base):
@@ -13,6 +12,10 @@ class QRSession(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     expires_at = Column(DateTime(timezone=True))
     qr_image = Column(String, nullable=False)
+    
+    # Add venue relationship
+    venue_id = Column(Integer, ForeignKey("venues.id"), nullable=True)
+    venue = relationship("Venue", back_populates="qr_sessions")
     
     # Add relationship to Attendance
     attendances = relationship("Attendance", back_populates="session")
