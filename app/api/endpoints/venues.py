@@ -28,10 +28,16 @@ def list_venues(db: Session = Depends(get_db)):
             for venue in venues
         ]
         
+        # Log the result for debugging
+        print(f"Venues list API returned {len(result)} venues")
+        
         return result
     except Exception as e:
+        # Log the error for debugging
+        print(f"Error in list_venues: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to list venues: {str(e)}"
         )
+
 
