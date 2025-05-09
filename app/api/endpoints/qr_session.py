@@ -18,6 +18,7 @@ from app.models.qr_session import QRSession
 from app.models.attendance import Attendance
 from app.models.venue import Venue
 from app.models.flagged_log import FlaggedLog  # Add this import
+from app.models.institution import Institution  # Import Institution model
 from app.core.config import settings
 from app.services.geo_validation import GeoValidator, InvalidLocationException
 
@@ -87,6 +88,7 @@ def generate_qr_code(
             
         # Get venue if provided
         venue = None
+        venue_name = None
         if venue_id:
             venue = db.query(Venue).filter(Venue.id == venue_id).first()
             if not venue:
@@ -94,6 +96,11 @@ def generate_qr_code(
                     status_code=404,
                     detail=f"Venue with ID {venue_id} not found"
                 )
+            venue_name = venue.name
+        else:
+            # Use institution name as venue name for institution-wide QR codes
+            institution = db.query(Institution).filter(Institution.id == settings.DEFAULT_INSTITUTION_ID).first()
+            venue_name = f"{institution.name} (Institution-wide)" if institution else "Institution-wide"
         
         # Generate session ID and expiry time
         session_id = str(uuid.uuid4())
@@ -131,7 +138,11 @@ def generate_qr_code(
         db.commit()
         db.refresh(db_session)
         
-        return db_session
+        # Add venue_name to response
+        response_data = db_session.__dict__.copy()
+        response_data["venue_name"] = venue_name
+        
+        return response_data
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -389,7 +400,11 @@ def generate_session_for_venue(
         db.commit()
         db.refresh(db_session)
         
-        return db_session
+        # Add venue_name to response
+        response_data = db_session.__dict__.copy()
+        response_data["venue_name"] = venue.name
+        
+        return response_data
         
     except HTTPException:
         raise
@@ -399,6 +414,8 @@ def generate_session_for_venue(
             status_code=500,
             detail=f"Failed to generate QR session: {str(e)}"
         )
+
+
 
 
 

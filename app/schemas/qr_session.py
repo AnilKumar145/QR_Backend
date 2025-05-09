@@ -16,9 +16,8 @@ class QRSessionResponse(BaseModel):
     expires_at: Optional[datetime] = None
     qr_image: str
     venue_id: Optional[int] = None
+    venue_name: Optional[str] = None
 
     class Config:
         from_attributes = True  # new pydantic v2 syntax (previously orm_mode)
-
-
 

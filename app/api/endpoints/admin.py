@@ -321,13 +321,38 @@ def create_venue(venue: VenueCreate, db: Session = Depends(get_db)):
     db.refresh(db_venue)
     return db_venue
 
-@router.get("/venues", response_model=List[VenueResponse])
-def get_venues(institution_id: int = None, db: Session = Depends(get_db)):
-    """Get all venues, optionally filtered by institution_id"""
-    query = db.query(Venue)
-    if institution_id:
-        query = query.filter(Venue.institution_id == institution_id)
-    return query.all()
+@router.get("/venues", response_model=List[dict])
+def list_venues(db: Session = Depends(get_db)):
+    """List all venues with their institution names"""
+    try:
+        # Use a join to get institution names
+        venues_with_institutions = db.execute("""
+            SELECT v.id, v.name, v.latitude, v.longitude, v.radius_meters, 
+                   i.id as institution_id, i.name as institution_name
+            FROM venues v
+            JOIN institutions i ON v.institution_id = i.id
+            ORDER BY v.name
+        """).fetchall()
+        
+        # Convert to list of dictionaries
+        result = []
+        for venue in venues_with_institutions:
+            result.append({
+                "id": venue.id,
+                "name": venue.name,
+                "latitude": venue.latitude,
+                "longitude": venue.longitude,
+                "radius_meters": venue.radius_meters,
+                "institution_id": venue.institution_id,
+                "institution_name": venue.institution_name
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list venues: {str(e)}"
+        )
 
 @router.get("/venues/{venue_id}", response_model=VenueResponse)
 def get_venue(venue_id: int, db: Session = Depends(get_db)):
@@ -425,5 +450,6 @@ def get_venue_statistics(
             "by_reason": flagged_by_reason
         }
     }
+
 
 
