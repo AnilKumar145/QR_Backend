@@ -325,14 +325,19 @@ def create_venue(venue: VenueCreate, db: Session = Depends(get_db)):
 def list_venues(db: Session = Depends(get_db)):
     """List all venues with their institution names"""
     try:
-        # Use a join to get institution names
-        venues_with_institutions = db.execute("""
+        # Use SQLAlchemy's text() function to properly handle SQL text
+        from sqlalchemy import text
+        
+        # Use text() to properly handle the SQL query
+        sql_query = text("""
             SELECT v.id, v.name, v.latitude, v.longitude, v.radius_meters, 
                    i.id as institution_id, i.name as institution_name
             FROM venues v
             JOIN institutions i ON v.institution_id = i.id
             ORDER BY v.name
-        """).fetchall()
+        """)
+        
+        venues_with_institutions = db.execute(sql_query).fetchall()
         
         # Convert to list of dictionaries
         result = []
@@ -450,6 +455,7 @@ def get_venue_statistics(
             "by_reason": flagged_by_reason
         }
     }
+
 
 
 

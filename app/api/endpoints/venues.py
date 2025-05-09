@@ -14,13 +14,18 @@ def list_venues(db: Session = Depends(get_db)):
     List all venues with their institution names for the frontend dropdown
     """
     try:
-        # Query venues with institution names using a join
-        venues = db.execute("""
+        # Import text from sqlalchemy
+        from sqlalchemy import text
+        
+        # Query venues with institution names using a join with text()
+        sql_query = text("""
             SELECT v.id, v.name, i.name as institution_name
             FROM venues v
             JOIN institutions i ON v.institution_id = i.id
             ORDER BY v.name
-        """).fetchall()
+        """)
+        
+        venues = db.execute(sql_query).fetchall()
         
         # Convert to list of dictionaries
         result = [
@@ -39,5 +44,6 @@ def list_venues(db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Failed to list venues: {str(e)}"
         )
+
 
 
