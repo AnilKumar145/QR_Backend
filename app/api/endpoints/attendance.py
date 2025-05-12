@@ -225,7 +225,7 @@ async def mark_attendance(
             # Log is already done above
             raise HTTPException(
                 status_code=400,
-                detail=e.to_dict()
+                detail=e.to_dict()  # Make sure this returns a properly formatted error object
             )
 
         # Step 6: Create attendance data
@@ -361,6 +361,7 @@ def validate_session(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
