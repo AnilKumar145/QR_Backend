@@ -193,20 +193,25 @@ async def mark_attendance(
                 max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
                 
                 # Log the invalid location
-                flagged_log = FlaggedLog(
-                    session_id=session_id,
-                    roll_no=roll_no,
-                    reason="Location Out of Range",
-                    details=(
-                        f"Distance: {distance:.0f}m from {venue_name}. "
-                        f"Max allowed: {max_distance}m. "
-                        f"User location: {location_lat}, {location_lon}. "
-                        f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
-                        f"{venue.longitude if venue else settings.INSTITUTION_LON}"
+                try:
+                    flagged_log = FlaggedLog(
+                        session_id=session_id,
+                        roll_no=roll_no,
+                        reason="Location Out of Range",
+                        details=(
+                            f"Distance: {distance:.0f}m from {venue_name}. "
+                            f"Max allowed: {max_distance}m. "
+                            f"User location: {location_lat}, {location_lon}. "
+                            f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
+                            f"{venue.longitude if venue else settings.INSTITUTION_LON}"
+                        )
                     )
-                )
-                session.add(flagged_log)
-                session.commit()
+                    session.add(flagged_log)
+                    session.commit()
+                    logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
+                except Exception as e:
+                    logger.error(f"Error creating flagged log: {str(e)}")
+                    session.rollback()
                 
                 # Raise detailed exception
                 raise InvalidLocationException(
@@ -361,6 +366,7 @@ def validate_session(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 

@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, text
 from typing import List, Dict, Optional
+import traceback
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 
@@ -22,6 +23,10 @@ from app.models.venue import Venue
 from app.models.qr_session import QRSession  # Import QRSession model
 from app.core.dependencies import get_current_user
 from app.core.security import create_access_token
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 router = APIRouter()
 
@@ -199,21 +204,17 @@ def get_daily_statistics(
 def get_flagged_logs(
     skip: int = 0,
     limit: int = 100,
-    roll_no: str = None,  # Add roll_no as an optional filter parameter
+    roll_no: str = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get all flagged attendance logs"""
     try:
+        # Add logging
+        logger.info(f"Fetching flagged logs. Skip: {skip}, Limit: {limit}, Roll No Filter: {roll_no}")
+        
         # Start with a base query
-        query = db.query(
-            FlaggedLog.id,
-            FlaggedLog.session_id,
-            FlaggedLog.roll_no,
-            FlaggedLog.timestamp,
-            FlaggedLog.reason,
-            FlaggedLog.details
-        )
+        query = db.query(FlaggedLog)
         
         # Apply roll_no filter if provided
         if roll_no:
@@ -224,8 +225,8 @@ def get_flagged_logs(
             .offset(skip)\
             .limit(limit)\
             .all()
-        
-        # Convert to dict to handle any serialization issues
+            
+        # Convert to dict for response
         result = []
         for log in logs:
             result.append({
@@ -233,13 +234,20 @@ def get_flagged_logs(
                 "session_id": log.session_id,
                 "roll_no": log.roll_no,
                 "reason": log.reason,
-                "details": log.details if hasattr(log, 'details') else "",
+                "details": log.details,
                 "timestamp": log.timestamp.isoformat() if log.timestamp else None
             })
+            
+        logger.info(f"Found {len(result)} flagged logs")
+        return result
         
-        return {"flagged_logs": result, "total": len(result)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving flagged logs: {str(e)}")
+        logger.error(f"Error fetching flagged logs: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch flagged logs: {str(e)}"
+        )
 
 @router.get("/statistics/summary")
 def get_statistics_summary(
@@ -455,4 +463,5 @@ def get_venue_statistics(
             "by_reason": flagged_by_reason
         }
     }
+
 
