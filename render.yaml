@@ -16,12 +16,13 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        value: https://qr-frontend-w1va.vercel.app
+        value: https://qr-frontend-om5a.onrender.com
 
 databases:
   - name: qr-attendance-db
     databaseName: qr_attendance_tnze
     user: qr_attendance_tnze_user
+
 
 
 

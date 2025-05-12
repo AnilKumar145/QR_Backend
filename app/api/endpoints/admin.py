@@ -456,6 +456,3 @@ def get_venue_statistics(
         }
     }
 
-
-
-
