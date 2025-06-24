@@ -248,16 +248,6 @@ def validate_session(session_data: AttendanceCreate, db: Session = Depends(get_d
                 )
 
         except InvalidLocationException as e:
-            # Log the invalid location exception
-            flagged_log = FlaggedLog(
-                session_id=session_data.session_id,
-                roll_no=session_data.roll_no,
-                reason="Invalid Location",
-                details=str(e)
-            )
-            db.add(flagged_log)
-            db.commit()
-            
             raise HTTPException(
                 status_code=400,
                 detail=e.to_dict()
