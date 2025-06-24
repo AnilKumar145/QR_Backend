@@ -243,7 +243,7 @@ async def mark_attendance(
         attendance_handler = AttendanceHandler(session)
         new_attendance = await attendance_handler.process_attendance(
             attendance_data=attendance_data,
-            selfie_file=selfie
+            selfie=selfie
         )
 
         return {
@@ -257,7 +257,7 @@ async def mark_attendance(
             CoordinatePrecisionException, InvalidFileException, 
             FileSizeTooLargeException, FileTypeNotAllowedException) as e:
         logger.error(f"Attendance marking failed: {e}")
-        # InvalidLocationException is handled above and will not be caught here
+        # InvalidLocationException is no longer raised, so it won't be caught here
         raise HTTPException(
             status_code=400,
             detail=e.to_dict()
