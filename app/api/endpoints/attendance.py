@@ -183,54 +183,40 @@ async def mark_attendance(
         
         # Step 4: Validate location
         geo_validator = GeoValidator(venue)
-        try:
-            is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
-            logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
+        is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
+        logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
+        
+        if not is_valid:
+            # Create venue-specific error
+            venue_name = venue.name if venue else "campus"
+            max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
             
-            if not is_valid:
-                # Create venue-specific error
-                venue_name = venue.name if venue else "campus"
-                max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
-                
-                # Log the invalid location
-                try:
-                    flagged_log = FlaggedLog(
-                        session_id=session_id,
-                        roll_no=roll_no,
-                        reason="Location Out of Range",
-                        details=(
-                            f"Distance: {distance:.0f}m from {venue_name}. "
-                            f"Max allowed: {max_distance}m. "
-                            f"User location: {location_lat}, {location_lon}. "
-                            f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
-                            f"{venue.longitude if venue else settings.INSTITUTION_LON}"
-                        )
-                    )
-                    session.add(flagged_log)
-                    session.commit()
-                    logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
-                except Exception as e:
-                    logger.error(f"Error creating flagged log: {str(e)}")
-                    session.rollback()
-                
-                # Raise detailed exception
-                raise InvalidLocationException(
-                    distance=distance,
-                    lat=location_lat,
-                    lon=location_lon,
-                    venue_lat=venue.latitude if venue else settings.INSTITUTION_LAT,
-                    venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
-                    venue_name=venue_name,
-                    max_distance=max_distance
+            # Log the invalid location
+            flagged_log = FlaggedLog(
+                session_id=session_id,
+                roll_no=roll_no,
+                reason="Location Out of Range",
+                details=(
+                    f"Distance: {distance:.0f}m from {venue_name}. "
+                    f"Max allowed: {max_distance}m. "
+                    f"User location: {location_lat}, {location_lon}. "
+                    f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
+                    f"{venue.longitude if venue else settings.INSTITUTION_LON}"
                 )
-                
-        except InvalidLocationException as e:
-            logger.error(f"Location validation failed: {str(e)}")
+            )
+            session.add(flagged_log)
+            session.commit()
+            logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
             
-            # Log is already done above
-            raise HTTPException(
-                status_code=400,
-                detail=e.to_dict()  # Make sure this returns a properly formatted error object
+            # Raise detailed exception
+            raise InvalidLocationException(
+                distance=distance,
+                lat=location_lat,
+                lon=location_lon,
+                venue_lat=venue.latitude if venue else settings.INSTITUTION_LAT,
+                venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
+                venue_name=venue_name,
+                max_distance=max_distance
             )
 
         # Step 6: Create attendance data
@@ -248,60 +234,32 @@ async def mark_attendance(
 
         # Step 7: Process attendance
         attendance_handler = AttendanceHandler(session)
-        try:
-            success, message = await attendance_handler.process_attendance(
-                attendance_data,
-                selfie
-            )
-            
-            if not success:
-                logger.error(f"Attendance processing failed: {message}")
-                raise HTTPException(
-                    status_code=400, 
-                    detail={
-                        "error": "attendance_processing_failed",
-                        "message": message
-                    }
-                )
-                
-            return {"success": True, "message": message}
-            
-        except InvalidLocationException as le:
-            logger.error(f"Location validation failed: {str(le)}")
-            raise HTTPException(
-                status_code=400,
-                detail=le.to_dict()
-            )
-        except AttendanceException as ae:
-            logger.error(f"Attendance error: {str(ae)}")
-            raise ae
-        except Exception as e:
-            logger.error(f"Attendance processing error: {str(e)}")
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "attendance_processing_error",
-                    "message": str(e)
-                }
-            )
-            
-    except (SessionNotFoundException, SessionExpiredException, 
-            DuplicateAttendanceException, InvalidCoordinateException,
-            CoordinatePrecisionException, FileSizeTooLargeException,
+        new_attendance = await attendance_handler.process_attendance(
+            attendance_data=attendance_data,
+            selfie_file=selfie
+        )
+
+        return {
+            "message": "Attendance marked successfully",
+            "attendance_id": new_attendance.id,
+            "timestamp": new_attendance.timestamp
+        }
+    
+    except (SessionNotFoundException, SessionExpiredException,
+            DuplicateAttendanceException, InvalidLocationException,
+            InvalidCoordinateException, CoordinatePrecisionException,
+            InvalidFileException, FileSizeTooLargeException,
             FileTypeNotAllowedException) as e:
-        # These exceptions already have the right format
-        raise e
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error in attendance marking: {str(e)}")
-        logger.error(traceback.format_exc())
+        logger.error(f"Attendance marking failed: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=e.to_dict()
+        )
+    except Exception:
+        logger.error(f"An unexpected error occurred: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": "internal_server_error",
-                "message": f"Unexpected error: {str(e)}"
-            }
+            detail={"error": "internal_error", "message": "An unexpected server error occurred."}
         )
 
 @router.post("/validate", response_model=AttendanceResponse)
@@ -366,6 +324,16 @@ def validate_session(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{session_id}/status/{roll_no}")
+def get_attendance_status(
+    session_id: str,
+    roll_no: str,
+    db: Session = Depends(get_db)
+):
+    # Implement the logic to get attendance status
+    # This is a placeholder and should be replaced with the actual implementation
+    return {"status": "Not implemented"}
 
 
 
