@@ -10,6 +10,9 @@ class QRSessionBase(BaseModel):
 class QRSessionCreate(BaseModel):
     venue_id: Optional[int] = None
 
+class QRSessionRequest(BaseModel):
+    duration: int = Field(..., gt=0, le=1440, description="Duration in minutes")
+
 class QRSessionResponse(BaseModel):
     session_id: str
     created_at: datetime

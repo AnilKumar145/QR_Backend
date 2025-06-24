@@ -12,7 +12,7 @@ import traceback
 
 # Import models and schemas
 from app.db.base import get_db
-from app.schemas.qr_session import QRSessionCreate, QRSessionResponse
+from app.schemas.qr_session import QRSessionCreate, QRSessionResponse, QRSessionRequest
 from app.schemas.attendance import AttendanceCreate, AttendanceResponse
 from app.models.qr_session import QRSession
 from app.models.attendance import Attendance
@@ -348,30 +348,35 @@ def test_validate_session_invalid_data(client: TestClient):
 @router.post("/generate-for-venue/{venue_id}", response_model=QRSessionResponse)
 def generate_session_for_venue(
     venue_id: int,
-    duration_minutes: int = Query(2, gt=0, le=1440),
+    request_body: QRSessionRequest,
     db: Session = Depends(get_db)
 ):
-    """Generate a new QR session for a specific venue"""
+    """
+    Generate a QR code session for a specific venue.
+    - The duration of the session is passed in the request body.
+    """
     try:
-        # Check if venue exists
+        # Fetch the venue by its ID
         venue = db.query(Venue).filter(Venue.id == venue_id).first()
         if not venue:
             raise HTTPException(
                 status_code=404,
                 detail=f"Venue with ID {venue_id} not found"
             )
-        
+
+        # Use the duration from the request body
+        duration_minutes = request_body.duration
+
         # Generate a unique session ID
         session_id = str(uuid.uuid4())
         
-        # Set expiry time based on duration_minutes
-        current_time = datetime.now(UTC)
-        expires_at = current_time + timedelta(minutes=duration_minutes)
-        
-        # Generate attendance URL
+        # Calculate the expiration time
+        expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
+
+        # Generate the attendance URL for the frontend
         attendance_url = f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
-        
-        # Generate QR code
+
+        # Generate the QR code image
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -380,40 +385,35 @@ def generate_session_for_venue(
         )
         qr.add_data(attendance_url)
         qr.make(fit=True)
-        
-        # Create QR image
-        qr_image = qr.make_image(fill_color="black", back_color="white")
+
+        img = qr.make_image(fill_color="black", back_color="white")
         buffered = BytesIO()
-        qr_image.save(buffered, format="PNG")
+        img.save(buffered, format="PNG")
         qr_image_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
-        # Create QR session with venue_id
+
+        # Create the QR session in the database
         db_session = QRSession(
             session_id=session_id,
             expires_at=expires_at,
             qr_image=f"data:image/png;base64,{qr_image_base64}",
-            created_at=current_time,
             venue_id=venue_id
         )
-        
         db.add(db_session)
         db.commit()
         db.refresh(db_session)
-        
-        # Add venue_name to response
-        response_data = db_session.__dict__.copy()
-        response_data["venue_name"] = venue.name
-        
-        return response_data
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error generating QR session for venue: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate QR session: {str(e)}"
+
+        # Prepare and return the response
+        return QRSessionResponse(
+            session_id=db_session.session_id,
+            created_at=db_session.created_at,
+            expires_at=db_session.expires_at,
+            qr_image=db_session.qr_image,
+            venue_id=db_session.venue_id,
+            venue_name=venue.name
         )
+    except Exception as e:
+        logger.error(f"Error generating QR session for venue {venue_id}: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
