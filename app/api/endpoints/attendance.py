@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, DateTime
 from datetime import datetime, timezone, UTC
@@ -208,8 +209,8 @@ async def mark_attendance(
             session.commit()
             logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
             
-            # Raise detailed exception
-            raise InvalidLocationException(
+            # Build the error response payload
+            error_exception = InvalidLocationException(
                 distance=distance,
                 lat=location_lat,
                 lon=location_lon,
@@ -217,6 +218,12 @@ async def mark_attendance(
                 venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
                 venue_name=venue_name,
                 max_distance=max_distance
+            )
+            
+            # Return a direct JSON response to prevent transaction rollback
+            return JSONResponse(
+                status_code=400,
+                content=error_exception.to_dict()
             )
 
         # Step 6: Create attendance data
@@ -246,11 +253,11 @@ async def mark_attendance(
         }
     
     except (SessionNotFoundException, SessionExpiredException,
-            DuplicateAttendanceException, InvalidLocationException,
-            InvalidCoordinateException, CoordinatePrecisionException,
-            InvalidFileException, FileSizeTooLargeException,
-            FileTypeNotAllowedException) as e:
+            DuplicateAttendanceException, InvalidCoordinateException, 
+            CoordinatePrecisionException, InvalidFileException, 
+            FileSizeTooLargeException, FileTypeNotAllowedException) as e:
         logger.error(f"Attendance marking failed: {e}")
+        # InvalidLocationException is handled above and will not be caught here
         raise HTTPException(
             status_code=400,
             detail=e.to_dict()
