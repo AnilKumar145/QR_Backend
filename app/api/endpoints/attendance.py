@@ -131,7 +131,6 @@ async def mark_attendance(
             )
             session.add(flagged_log)
             session.commit()
-            
             raise SessionNotFoundException(session_id)
         
         logger.info(f"Session found: {qr_session}")
@@ -148,7 +147,6 @@ async def mark_attendance(
             )
             session.add(flagged_log)
             session.commit()
-            
             raise SessionExpiredException(str(qr_session.expires_at))
 
         # Step 2: Duplicate check
@@ -168,7 +166,6 @@ async def mark_attendance(
             )
             session.add(flagged_log)
             session.commit()
-            
             raise DuplicateAttendanceException(
                 roll_no=roll_no,
                 session_id=session_id,
@@ -183,54 +180,39 @@ async def mark_attendance(
         
         # Step 4: Validate location
         geo_validator = GeoValidator(venue)
-        try:
-            is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
-            logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
+        is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
+        logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
+        
+        if not is_valid:
+            venue_name = venue.name if venue else "campus"
+            max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
             
-            if not is_valid:
-                # Create venue-specific error
-                venue_name = venue.name if venue else "campus"
-                max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
-                
-                # Log the invalid location
-                try:
-                    flagged_log = FlaggedLog(
-                        session_id=session_id,
-                        roll_no=roll_no,
-                        reason="Location Out of Range",
-                        details=(
-                            f"Distance: {distance:.0f}m from {venue_name}. "
-                            f"Max allowed: {max_distance}m. "
-                            f"User location: {location_lat}, {location_lon}. "
-                            f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
-                            f"{venue.longitude if venue else settings.INSTITUTION_LON}"
-                        )
-                    )
-                    session.add(flagged_log)
-                    session.commit()
-                    logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
-                except Exception as e:
-                    logger.error(f"Error creating flagged log: {str(e)}")
-                    session.rollback()
-                
-                # Raise detailed exception
-                raise InvalidLocationException(
-                    distance=distance,
-                    lat=location_lat,
-                    lon=location_lon,
-                    venue_lat=venue.latitude if venue else settings.INSTITUTION_LAT,
-                    venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
-                    venue_name=venue_name,
-                    max_distance=max_distance
+            # Log the invalid location
+            flagged_log = FlaggedLog(
+                session_id=session_id,
+                roll_no=roll_no,
+                reason="Location Out of Range",
+                details=(
+                    f"Distance: {distance:.0f}m from {venue_name}. "
+                    f"Max allowed: {max_distance}m. "
+                    f"User location: {location_lat}, {location_lon}. "
+                    f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
+                    f"{venue.longitude if venue else settings.INSTITUTION_LON}"
                 )
-                
-        except InvalidLocationException as e:
-            logger.error(f"Location validation failed: {str(e)}")
+            )
+            session.add(flagged_log)
+            session.commit()
+            logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
             
-            # Log is already done above
-            raise HTTPException(
-                status_code=400,
-                detail=e.to_dict()  # Make sure this returns a properly formatted error object
+            # Raise detailed exception
+            raise InvalidLocationException(
+                distance=distance,
+                lat=location_lat,
+                lon=location_lon,
+                venue_lat=venue.latitude if venue else settings.INSTITUTION_LAT,
+                venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
+                venue_name=venue_name,
+                max_distance=max_distance
             )
 
         # Step 6: Create attendance data
