@@ -186,26 +186,9 @@ async def mark_attendance(
         if not is_valid:
             venue_name = venue.name if venue else "campus"
             max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
-            
-            # Log the invalid location
-            flagged_log = FlaggedLog(
-                session_id=session_id,
-                roll_no=roll_no,
-                reason="Location Out of Range",
-                details=(
-                    f"Distance: {distance:.0f}m from {venue_name}. "
-                    f"Max allowed: {max_distance}m. "
-                    f"User location: {location_lat}, {location_lon}. "
-                    f"Venue location: {venue.latitude if venue else settings.INSTITUTION_LAT}, "
-                    f"{venue.longitude if venue else settings.INSTITUTION_LON}"
-                )
-            )
-            session.add(flagged_log)
-            session.commit()
-            logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
-            
-            # Raise detailed exception
-            raise InvalidLocationException(
+
+            # Create the custom exception object to easily get the error details
+            location_exception = InvalidLocationException(
                 distance=distance,
                 lat=location_lat,
                 lon=location_lon,
@@ -213,6 +196,23 @@ async def mark_attendance(
                 venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
                 venue_name=venue_name,
                 max_distance=max_distance
+            )
+
+            # Log the invalid location to the database
+            flagged_log = FlaggedLog(
+                session_id=session_id,
+                roll_no=roll_no,
+                reason="Location Out of Range",
+                details=str(location_exception)
+            )
+            session.add(flagged_log)
+            session.commit()
+            logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
+
+            # Raise a standard HTTPException that FastAPI can handle
+            raise HTTPException(
+                status_code=400,
+                detail=location_exception.to_dict()
             )
 
         # Step 6: Create attendance data
