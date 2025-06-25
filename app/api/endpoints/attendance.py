@@ -6,7 +6,7 @@ from typing import Optional
 import logging
 import os
 import traceback
-from app.db.base import get_db
+from app.db.base import get_db, SessionLocal
 from app.models.qr_session import QRSession
 from app.models.attendance import Attendance
 from app.models.venue import Venue
@@ -31,6 +31,23 @@ from app.services.geo_validation import GeoValidator
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+def log_failed_attempt(log_data: dict):
+    """
+    Logs a failed attendance attempt in a separate database session
+    to ensure it's saved even if the main transaction is rolled back.
+    """
+    db_log = SessionLocal()
+    try:
+        flagged_log = FlaggedLog(**log_data)
+        db_log.add(flagged_log)
+        db_log.commit()
+        logger.info(f"Successfully logged failed attempt for roll_no: {log_data.get('roll_no')}")
+    except Exception as e:
+        logger.error(f"Failed to write to flagged_logs: {e}")
+        db_log.rollback()
+    finally:
+        db_log.close()
 
 @router.get("/selfie/{attendance_id}")
 async def get_selfie(
@@ -122,15 +139,10 @@ async def mark_attendance(
         qr_session = session.query(QRSession).filter_by(session_id=session_id).first()
         if not qr_session:
             logger.error(f"Session not found in database: {session_id}")
-            # Log the invalid session
-            flagged_log = FlaggedLog(
-                session_id=session_id,
-                roll_no=roll_no,
-                reason="Session Not Found",
-                details=f"Session ID not found in database"
-            )
-            session.add(flagged_log)
-            session.commit()
+            log_failed_attempt({
+                "session_id": session_id, "roll_no": roll_no,
+                "reason": "Session Not Found", "details": "Session ID not found in database"
+            })
             raise SessionNotFoundException(session_id)
         
         logger.info(f"Session found: {qr_session}")
@@ -138,15 +150,11 @@ async def mark_attendance(
         
         if qr_session.is_expired():
             logger.error(f"Session expired: {session_id}")
-            # Log the expired session
-            flagged_log = FlaggedLog(
-                session_id=session_id,
-                roll_no=roll_no,
-                reason="Expired Session",
-                details=f"Attempted to use expired session. Expired at: {qr_session.expires_at}"
-            )
-            session.add(flagged_log)
-            session.commit()
+            log_failed_attempt({
+                "session_id": session_id, "roll_no": roll_no,
+                "reason": "Expired Session",
+                "details": f"Attempted to use expired session. Expired at: {qr_session.expires_at}"
+            })
             raise SessionExpiredException(str(qr_session.expires_at))
 
         # Step 2: Duplicate check
@@ -157,15 +165,11 @@ async def mark_attendance(
         
         if existing:
             logger.error(f"Duplicate attendance for roll no {roll_no} in session {session_id}")
-            # Log the duplicate attendance
-            flagged_log = FlaggedLog(
-                session_id=session_id,
-                roll_no=roll_no,
-                reason="Duplicate Attendance",
-                details=f"Attempted to mark attendance again. Original timestamp: {existing.timestamp}"
-            )
-            session.add(flagged_log)
-            session.commit()
+            log_failed_attempt({
+                "session_id": session_id, "roll_no": roll_no,
+                "reason": "Duplicate Attendance",
+                "details": f"Attempted to mark attendance again. Original timestamp: {existing.timestamp}"
+            })
             raise DuplicateAttendanceException(
                 roll_no=roll_no,
                 session_id=session_id,
@@ -199,15 +203,10 @@ async def mark_attendance(
             )
 
             # Log the invalid location to the database
-            flagged_log = FlaggedLog(
-                session_id=session_id,
-                roll_no=roll_no,
-                reason="Location Out of Range",
-                details=str(location_exception)
-            )
-            session.add(flagged_log)
-            session.commit()
-            logger.info(f"Successfully created flagged log for roll_no: {roll_no}")
+            log_failed_attempt({
+                "session_id": session_id, "roll_no": roll_no,
+                "reason": "Location Out of Range", "details": str(location_exception)
+            })
 
             # Raise a standard HTTPException that FastAPI can handle
             raise HTTPException(
