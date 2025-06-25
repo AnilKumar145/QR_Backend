@@ -37,17 +37,28 @@ def log_failed_attempt(log_data: dict):
     Logs a failed attendance attempt in a separate database session
     to ensure it's saved even if the main transaction is rolled back.
     """
-    db_log = SessionLocal()
+    db_log = None
     try:
+        db_log = SessionLocal()
         flagged_log = FlaggedLog(**log_data)
         db_log.add(flagged_log)
         db_log.commit()
         logger.info(f"Successfully logged failed attempt for roll_no: {log_data.get('roll_no')}")
     except Exception as e:
-        logger.error(f"Failed to write to flagged_logs: {e}")
-        db_log.rollback()
+        # --- START AGGRESSIVE DEBUGGING ---
+        # Make the error extremely visible in the server logs
+        print("---!!! CRITICAL ERROR WRITING TO FLAGGED LOGS !!!---")
+        import traceback
+        traceback.print_exc()
+        print(f"---!!! LOGGING ERROR DETAILS: {e} !!!---")
+        # --- END AGGRESSIVE DEBUGGING ---
+        
+        logger.error(f"Critical error writing to flagged_logs: {e}")
+        if db_log:
+            db_log.rollback()
     finally:
-        db_log.close()
+        if db_log:
+            db_log.close()
 
 @router.get("/selfie/{attendance_id}")
 async def get_selfie(
@@ -191,28 +202,35 @@ async def mark_attendance(
             venue_name = venue.name if venue else "campus"
             max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
 
-            # Create the custom exception object to easily get the error details
-            location_exception = InvalidLocationException(
-                distance=distance,
-                lat=location_lat,
-                lon=location_lon,
-                venue_lat=venue.latitude if venue else settings.INSTITUTION_LAT,
-                venue_lon=venue.longitude if venue else settings.INSTITUTION_LON,
-                venue_name=venue_name,
-                max_distance=max_distance
-            )
+            # --- START SIMPLIFIED FIX ---
+            # 1. Construct the error detail dictionary directly
+            error_detail = {
+                "error": "invalid_location",
+                "message": "You are outside the allowed geofence.",
+                "distance_meters": round(distance, 2),
+                "max_distance_meters": round(max_distance, 2),
+                "user_location": {"lat": location_lat, "lon": location_lon},
+                "venue_name": venue_name,
+                "venue_location": {
+                    "lat": venue.latitude if venue else settings.INSTITUTION_LAT,
+                    "lon": venue.longitude if venue else settings.INSTITUTION_LON
+                }
+            }
 
-            # Log the invalid location to the database
+            # 2. Log the failure using the robust, independent logger
             log_failed_attempt({
-                "session_id": session_id, "roll_no": roll_no,
-                "reason": "Location Out of Range", "details": str(location_exception)
+                "session_id": session_id,
+                "roll_no": roll_no,
+                "reason": "Location Out of Range",
+                "details": f"User was {distance:.2f}m away from '{venue_name}'. Max distance is {max_distance}m."
             })
 
-            # Raise a standard HTTPException that FastAPI can handle
+            # 3. Raise the standard HTTPException
             raise HTTPException(
                 status_code=400,
-                detail=location_exception.to_dict()
+                detail=error_detail
             )
+            # --- END SIMPLIFIED FIX ---
 
         # Step 6: Create attendance data
         attendance_data = AttendanceCreate(
