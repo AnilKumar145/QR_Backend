@@ -11,6 +11,8 @@ load_dotenv()
 # Import your models here
 from app.models.qr_session import QRSession
 from app.models.attendance import Attendance
+from app.models.venue import Venue
+from app.models.institution import Institution
 from app.db.base import Base
 
 # this is the Alembic Config object

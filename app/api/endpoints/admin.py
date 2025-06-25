@@ -111,6 +111,22 @@ def get_all_attendances(
                 .limit(limit)\
                 .all()
 
+@router.get("/attendance/by-venue/{venue_id}", response_model=List[AttendanceResponse])
+def get_attendance_by_venue(
+    venue_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all attendance records for a specific venue (by venue_id)"""
+    # Find all session_ids for this venue
+    session_ids = db.query(QRSession.session_id).filter(QRSession.venue_id == venue_id).all()
+    session_ids = [sid[0] for sid in session_ids]
+    if not session_ids:
+        return []
+    # Get all attendance records for these session_ids
+    records = db.query(Attendance).filter(Attendance.session_id.in_(session_ids)).order_by(Attendance.timestamp.desc()).all()
+    return records
+
 @router.get("/statistics/daily")
 def get_daily_statistics(
     days: int = Query(7, gt=0, le=30),

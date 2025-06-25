@@ -24,7 +24,10 @@ class Attendance(Base):
     selfie_path = Column(String, nullable=True)
     selfie_data = Column(LargeBinary)
     selfie_content_type = Column(String)
-    
+
+    # Add venue_id column
+    venue_id = Column(Integer, ForeignKey("venues.id"), nullable=True)
+
     # Add relationship to QRSession
     session = relationship("QRSession", back_populates="attendances")
     
