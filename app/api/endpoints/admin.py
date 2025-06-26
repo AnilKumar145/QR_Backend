@@ -480,4 +480,39 @@ def get_venue_statistics(
         }
     }
 
+@router.get("/recent-activity")
+def get_recent_activity(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get recent QR sessions with attendee count and duration"""
+    # Get recent sessions (last 24 hours or limit)
+    recent_sessions = db.query(QRSession).order_by(QRSession.created_at.desc()).limit(limit).all()
+    result = []
+    for session in recent_sessions:
+        # Get venue and institution
+        venue = db.query(Venue).filter(Venue.id == session.venue_id).first()
+        institution_name = None
+        if venue:
+            institution = db.query(Institution).filter(Institution.id == venue.institution_id).first()
+            institution_name = institution.name if institution else None
+        # Calculate duration in minutes
+        duration = None
+        if session.created_at and session.expires_at:
+            duration = int((session.expires_at - session.created_at).total_seconds() // 60)
+        # Count attendees
+        attendee_count = db.query(func.count(Attendance.id)).filter(Attendance.session_id == session.session_id).scalar()
+        result.append({
+            "session_id": session.session_id,
+            "venue_name": venue.name if venue else None,
+            "institution_name": institution_name,
+            "campus": f"{venue.name} ({institution_name})" if venue and institution_name else None,
+            "created_at": session.created_at,
+            "expires_at": session.expires_at,
+            "duration": duration,
+            "attendee_count": attendee_count
+        })
+    return result
+
 
