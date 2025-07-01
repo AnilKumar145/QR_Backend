@@ -39,6 +39,8 @@ def init_db():
         from app.models.attendance import Attendance
         from app.models.admin_user import AdminUser  # Changed from Admin to AdminUser
         from app.models.flagged_log import FlaggedLog
+        from app.models.venue import Venue
+        from app.models.institution import Institution
         
         Base.metadata.create_all(bind=engine)
         print("Database tables created successfully")
