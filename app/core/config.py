@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     MAX_SELFIE_SIZE: int = 5_242_880  # 5MB in bytes
     
     # Frontend URL configuration
-    FRONTEND_URL: str = "https://qr-frontend-om5a.onrender.com"  # Update with your actual Render URL
+    FRONTEND_URL: str = "https://new-attendance-form.vercel.app"  # Update with your actual Render URL
 
     class Config:
         case_sensitive = True

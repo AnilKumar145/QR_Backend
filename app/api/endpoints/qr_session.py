@@ -363,7 +363,7 @@ def generate_session_for_venue(
                 status_code=404,
                 detail=f"Venue with ID {venue_id} not found"
             )
-
+        
         # Use the duration from the request body
         duration_minutes = request_body.duration
 
@@ -372,10 +372,10 @@ def generate_session_for_venue(
         
         # Calculate the expiration time
         expires_at = datetime.now(UTC) + timedelta(minutes=duration_minutes)
-
+        
         # Generate the attendance URL for the frontend
         attendance_url = f"{settings.FRONTEND_URL}/mark-attendance/{session_id}"
-
+        
         # Generate the QR code image
         qr = qrcode.QRCode(
             version=1,
@@ -385,12 +385,12 @@ def generate_session_for_venue(
         )
         qr.add_data(attendance_url)
         qr.make(fit=True)
-
+        
         img = qr.make_image(fill_color="black", back_color="white")
         buffered = BytesIO()
         img.save(buffered, format="PNG")
         qr_image_base64 = base64.b64encode(buffered.getvalue()).decode()
-
+        
         # Create the QR session in the database
         db_session = QRSession(
             session_id=session_id,
@@ -401,7 +401,7 @@ def generate_session_for_venue(
         db.add(db_session)
         db.commit()
         db.refresh(db_session)
-
+        
         # Prepare and return the response
         return QRSessionResponse(
             session_id=db_session.session_id,

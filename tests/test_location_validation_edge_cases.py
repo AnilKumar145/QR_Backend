@@ -60,3 +60,4 @@ def test_attendance_edge_cases(venue, venue_lat, venue_lon, student_lat, student
 
 
 
+ 

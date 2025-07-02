@@ -27,7 +27,7 @@ class Attendance(Base):
 
     # Add venue_id column
     venue_id = Column(Integer, ForeignKey("venues.id"), nullable=True)
-
+    
     # Add relationship to QRSession
     session = relationship("QRSession", back_populates="attendances")
     
