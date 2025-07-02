@@ -194,7 +194,7 @@ async def mark_attendance(
             logger.info(f"Using venue for validation: {venue.name if venue else 'None'}")
         
         # Step 4: Validate location
-        geo_validator = GeoValidator(venue)
+            geo_validator = GeoValidator(venue)
             is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
             logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
             
