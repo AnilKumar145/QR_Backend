@@ -194,14 +194,14 @@ async def mark_attendance(
             logger.info(f"Using venue for validation: {venue.name if venue else 'None'}")
         
         # Step 4: Validate location
-            geo_validator = GeoValidator(venue)
-            is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
-            logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
+        geo_validator = GeoValidator(venue)
+        is_valid, distance = geo_validator.is_location_valid(location_lat, location_lon)
+        logger.info(f"Location validation result: valid={is_valid}, distance={distance:.2f}m")
+        
+        if not is_valid:
+            venue_name = venue.name if venue else "campus"
+            max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
             
-            if not is_valid:
-                venue_name = venue.name if venue else "campus"
-                max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
-                
             # --- START SIMPLIFIED FIX ---
             # 1. Construct the error detail dictionary directly
             error_detail = {
@@ -242,7 +242,8 @@ async def mark_attendance(
             branch=branch,
             section=section,
             location_lat=location_lat,
-            location_lon=location_lon
+            location_lon=location_lon,
+            venue_id=qr_session.venue_id
         )
 
         # Step 7: Process attendance
