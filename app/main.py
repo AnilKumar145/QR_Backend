@@ -56,6 +56,7 @@ app.add_middleware(
     allow_origins=[
         "https://qr-frontend-w1va.vercel.app",  # Old frontend URL
         "https://qr-frontend-om5a.onrender.com",  # New Render frontend URL
+        "https://new-attendance-form.vercel.app",  # <--- Add this line
         "http://localhost:5173",
         "http://localhost:3000"
     ],
