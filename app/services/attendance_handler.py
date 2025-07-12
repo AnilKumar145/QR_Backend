@@ -83,7 +83,7 @@ class AttendanceHandler:
             selfie_content = await selfie.read()
 
             # Create attendance record
-            attendance_dict = attendance_data.dict()
+            attendance_dict = attendance_data.model_dump()  # Fixed: use model_dump() instead of dict()
             attendance = Attendance(
                 **attendance_dict,
                 selfie_path=selfie_path,  # Keep storing the path

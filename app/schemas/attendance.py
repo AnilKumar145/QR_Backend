@@ -15,6 +15,7 @@ class AttendanceBase(BaseModel):
     location_lat: float = Field(..., ge=-90, le=90)
     location_lon: float = Field(..., ge=-180, le=180)
     session_id: str = Field(...)
+    venue_id: Optional[int] = Field(None)  # Add venue_id field
 
     @validator('location_lat', 'location_lon')
     def validate_coordinate_precision(cls, v):
@@ -37,7 +38,8 @@ class AttendanceBase(BaseModel):
                 "section": "A1",
                 "location_lat": 16.4663003,
                 "location_lon": 80.6747153,
-                "session_id": "550e8400-e29b-41d4-a716-446655440000"
+                "session_id": "550e8400-e29b-41d4-a716-446655440000",
+                "venue_id": 1
             }
         }
 
