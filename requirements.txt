@@ -58,3 +58,4 @@ loguru>=0.7.0
 
 # Debugging tools
 rich>=13.5.0
+httpx==0.28.1
