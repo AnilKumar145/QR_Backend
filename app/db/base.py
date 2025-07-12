@@ -21,10 +21,11 @@ is_render = os.getenv("RENDER") == "true"
 # Create engine with appropriate settings
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
+    pool_size=50,           # Increased from 5 to 50
+    max_overflow=100,       # Increased from 10 to 100
+    pool_timeout=60,        # Increased from 30 to 60 seconds
     pool_recycle=600,
+    pool_pre_ping=True,     # Added connection health check
     # Add SSL requirement for Render's PostgreSQL
     connect_args={"sslmode": "require"} if is_render or "dpg-" in SQLALCHEMY_DATABASE_URL else {}
 )

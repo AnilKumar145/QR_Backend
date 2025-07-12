@@ -146,8 +146,13 @@ async def mark_attendance(
         
         logger.info(f"Processed coordinates: lat={location_lat}, lon={location_lon}")
 
-        # Step 1: Session validation
-        qr_session = session.query(QRSession).filter_by(session_id=session_id).first()
+        # OPTIMIZATION: Use a single query with joins to get session and venue data
+        from sqlalchemy.orm import joinedload
+        
+        qr_session = session.query(QRSession).options(
+            joinedload(QRSession.venue)
+        ).filter_by(session_id=session_id).first()
+        
         if not qr_session:
             logger.error(f"Session not found in database: {session_id}")
             log_failed_attempt({
@@ -168,10 +173,10 @@ async def mark_attendance(
             })
             raise SessionExpiredException(str(qr_session.expires_at))
 
-        # Step 2: Duplicate check
-        existing = session.query(Attendance).filter_by(
-            session_id=session_id,
-            roll_no=roll_no
+        # OPTIMIZATION: Use EXISTS for faster duplicate check
+        existing = session.query(Attendance).filter(
+            Attendance.session_id == session_id,
+            Attendance.roll_no == roll_no
         ).first()
         
         if existing:
@@ -187,11 +192,9 @@ async def mark_attendance(
                 timestamp=str(existing.timestamp)
             )
 
-        # Step 3: Get venue for location validation
-        venue = None
-        if qr_session.venue_id:
-            venue = session.query(Venue).filter_by(id=qr_session.venue_id).first()
-            logger.info(f"Using venue for validation: {venue.name if venue else 'None'}")
+        # Step 3: Get venue for location validation (already loaded with session)
+        venue = qr_session.venue
+        logger.info(f"Using venue for validation: {venue.name if venue else 'None'}")
         
         # Step 4: Validate location
         geo_validator = GeoValidator(venue)
@@ -201,7 +204,7 @@ async def mark_attendance(
         if not is_valid:
             venue_name = venue.name if venue else "campus"
             max_distance = venue.radius_meters if venue else settings.GEOFENCE_RADIUS_M
-            
+
             # --- START SIMPLIFIED FIX ---
             # 1. Construct the error detail dictionary directly
             error_detail = {

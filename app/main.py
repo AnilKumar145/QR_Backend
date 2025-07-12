@@ -46,8 +46,8 @@ async def startup_event():
 # Add Rate Limiting
 app.add_middleware(
     RateLimitMiddleware,
-    requests_limit=100,
-    window_seconds=60
+    requests_limit=5000,    # Increased from 100 to 5000 requests per window
+    window_seconds=60       # 1 minute window
 )
 
 # Configure CORS
